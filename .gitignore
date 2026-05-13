@@ -1,0 +1,13 @@
+.env
+venv/
+__pycache__/
+*.pyc
+output/
+input/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+config/spend_log.json
+config/*.tflite
