@@ -81,44 +81,64 @@ def log_spend(amount):
     print(f"  💰 Spend logged: ${amount:.2f} | Today total: ${spend_log[today]:.2f}")
 
 # ── Configuration ────────────────────────────────────────────
-REFERENCE_IMAGE = "input/reference_style.png"
 
 # Your standard Pixar conversion prompt
-CARTOON_PROMPT = """I am uploading a real photo of a child.
-Convert this EXACT child's face into Pixar 3D animation style.
+CARTOON_PROMPT = """Convert the uploaded child photo into a Pixar-quality 3D rendered face while STRICTLY preserving the child’s real facial anatomy.
 
-STRICT RULES — do not break any of these:
+CRITICAL:
+The child must remain instantly recognizable as the SAME real child.
 
-Identity — copy everything from the uploaded photo:
-- Skin tone must match the photo exactly — sample the real
-  skin color and preserve it, do not make it darker or more orange
-- Face shape must match the photo — if the child has a round
-  face keep it round, if slim keep it slim
-- Eye shape and size must match the photo exactly — do NOT
-  enlarge or widen the eyes
-- Nose shape and size must match the photo
-- Mouth width and smile must match the photo
-- Hair color, hair texture, and hairline must match the photo
-  exactly — straight, wavy, or curly as shown
-- Preserve every distinctive feature visible in the photo —
-  dimples, birthmarks, bindi, glasses — only if they actually
-  appear in the photo. Do not add features that are not there.
+Preserve EXACTLY:
+- eye size
+- eye shape
+- eye spacing
+- nose size and structure
+- lip shape
+- cheek structure
+- jawline
+- forehead proportions
+- ear size
+- hairstyle
+- overall head proportions
 
-Art style:
-- Pixar 3D animation rendering — smooth skin, soft warm
-  lighting from above, subtle shading
-- Bright natural eyes with a small white catchlight
-- Clean crisp edges, vibrant but natural colors
+DO NOT reinterpret or stylize facial anatomy.
 
-Output:
-- Transparent background
-- Face and short neck only — no body, no clothing
-- Circular crop around the face
-- Clean flat edge at the bottom of the neck
+The goal is:
+REAL facial proportions + Pixar rendering quality.
 
-The cartoon must be INSTANTLY recognizable as the SAME child
-from the uploaded photo. Do not invent or change any feature.
-If the output looks like a different child — that is a FAILURE."""
+STYLE REQUIREMENTS:
+- Pixar-quality 3D rendering
+- smooth clean skin shading
+- warm cinematic lighting
+- subtle ambient occlusion
+- soft subsurface scattering
+- clean crisp edges
+- natural skin texture
+- realistic hair strands
+- animated-film material rendering
+
+IMPORTANT:
+- Keep the eyes the SAME SIZE as the real child
+- Do NOT enlarge the forehead
+- Do NOT enlarge the ears
+- Do NOT shrink the nose
+- Do NOT make cheeks puffier
+- Do NOT make the child look younger
+- Do NOT create baby proportions
+- Do NOT create chibi stylization
+- Do NOT exaggerate expressions
+
+OUTPUT:
+- transparent PNG
+- ONLY head and very short neck
+- centered composition
+- front-facing portrait
+- no background
+- no shoulders
+- no clothing
+- clean hard edges for compositing
+- no glow
+- no vignette."""
 
 # ── Main Function ─────────────────────────────────────────────
 def cartoonify_face(input_path, output_path):
@@ -161,7 +181,6 @@ def cartoonify_face(input_path, output_path):
     print(f"  → Model       : gpt-image-1")
     print(f"  → Quality     : high (~$0.19 per image)")
     print(f"  → Input image : {input_path}")
-    print(f"  → Reference   : {REFERENCE_IMAGE}")
     print("  ──────────────────────────────────────────")
 
     confirm = input("  Proceed with API call? (y/n): ").strip().lower()
