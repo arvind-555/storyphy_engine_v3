@@ -21,7 +21,7 @@ from io import BytesIO
 
 # ── Daily spend tracker ──────────────────────────────────────
 SPEND_LOG_FILE = "config/spend_log.json"
-DAILY_LIMIT    = 1.00   # max $ per day (safety limit)
+DAILY_LIMIT    = 2.00   # max $ per day (safety limit)
 
 
 def check_daily_spend():
@@ -84,48 +84,41 @@ def log_spend(amount):
 REFERENCE_IMAGE = "input/reference_style.png"
 
 # Your standard Pixar conversion prompt
-CARTOON_PROMPT = """I am attaching two things:
-1. A real photo of a child's face
-2. A reference illustration showing the exact cartoon style I need
+CARTOON_PROMPT = """I am uploading a real photo of a child.
+Convert this EXACT child's face into Pixar 3D animation style.
 
-Your task: Convert the child's face from the photo into a Pixar 3D 
-animation style cartoon, matching the exact style of the reference 
-illustration provided.
+STRICT RULES — do not break any of these:
 
-CRITICAL REQUIREMENTS:
+Identity — copy everything from the uploaded photo:
+- Skin tone must match the photo exactly — sample the real
+  skin color and preserve it, do not make it darker or more orange
+- Face shape must match the photo — if the child has a round
+  face keep it round, if slim keep it slim
+- Eye shape and size must match the photo exactly — do NOT
+  enlarge or widen the eyes
+- Nose shape and size must match the photo
+- Mouth width and smile must match the photo
+- Hair color, hair texture, and hairline must match the photo
+  exactly — straight, wavy, or curly as shown
+- Preserve every distinctive feature visible in the photo —
+  dimples, birthmarks, bindi, glasses — only if they actually
+  appear in the photo. Do not add features that are not there.
 
-Face preservation:
-- Keep the child's EXACT facial structure — face shape, eye shape, 
-  nose shape, lip shape must all be recognizable
-- Preserve the child's skin tone, converting it to warm Pixar-style 
-  shading
-- Keep any distinctive features — dimples, birthmarks, eye color
-- The cartoon version must be instantly recognizable as the same child
+Art style:
+- Pixar 3D animation rendering — smooth skin, soft warm
+  lighting from above, subtle shading
+- Bright natural eyes with a small white catchlight
+- Clean crisp edges, vibrant but natural colors
 
-Art style (match the reference image exactly):
-- Pixar 3D animation style
-- Smooth clean skin with soft warm cel shading
-- Subtle ambient occlusion around eyes, nose, under chin
-- Bright natural eyes with a small white catchlight reflection
-- Soft warm lighting from slightly above
-- Clean crisp edges — not painterly, not sketchy
-- Vibrant but natural colors
+Output:
+- Transparent background
+- Face and short neck only — no body, no clothing
+- Circular crop around the face
+- Clean flat edge at the bottom of the neck
 
-Output requirements:
-- Show ONLY the face and very short neck stub — circular crop
-- Transparent background (PNG)
-- The face should be sized and shaped to sit naturally on a 
-  toddler body with a circular neck opening
-- No shoulders, no body, no clothing — face and neck only
-- The bottom of the neck should be a clean flat edge
-
-Do NOT:
-- Change the child's eye size or shape
-- Exaggerate any features
-- Make it look like a different child
-- Add chibi proportions (oversized eyes, tiny nose)
-- Add any background"""
-
+The cartoon must be INSTANTLY recognizable as the SAME child
+from the uploaded photo. Do not invent or change any feature.
+If the output looks like a different child — that is a FAILURE."""
 
 # ── Main Function ─────────────────────────────────────────────
 def cartoonify_face(input_path, output_path):
@@ -156,13 +149,6 @@ def cartoonify_face(input_path, output_path):
         print(f"  ✖ ERROR: Input image not found: {input_path}")
         return None
 
-    if not os.path.exists(REFERENCE_IMAGE):
-        print(f"  ✖ ERROR: Reference style image not found!")
-        print(f"    Place your style reference at: {REFERENCE_IMAGE}")
-        return None
-
-    print(f"  → Reference  : {REFERENCE_IMAGE}")
-
     # ── Step 3: Initialize OpenAI client ─────────────────────
     client = OpenAI()
 
@@ -190,12 +176,11 @@ def cartoonify_face(input_path, output_path):
 
     try:
         # Open both images as file objects
-        with open(input_path, "rb") as child_file, \
-             open(REFERENCE_IMAGE, "rb") as ref_file:
+        with open(input_path, "rb") as child_file:
 
             response = client.images.edit(
                 model="gpt-image-1",
-                image=[child_file, ref_file],
+                image=child_file,
                 prompt=CARTOON_PROMPT,
                 size="1024x1024",
                 quality="high",

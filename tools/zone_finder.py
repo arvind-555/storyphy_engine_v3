@@ -250,20 +250,67 @@ def run_zone_finder():
     print("  STORYPHY — Zone Finder Tool")
     print("════════════════════════════════════════")
 
-   # Load existing zones.json if it exists (so we don't lose progress)
+    # Load existing zones.json if it exists (so we don't lose progress)
     zones = {}
     if os.path.exists(OUTPUT_FILE):
         with open(OUTPUT_FILE, "r") as f:
-            content = f.read().strip()   # read and remove whitespace
+            content = f.read().strip()
             if content:
-                # File has content — load it
                 zones = json.loads(content)
                 print(f"  → Loaded existing zones.json ({len(zones)} pages already configured)")
             else:
-                # File exists but is empty — start fresh
                 print("  → zones.json was empty, starting fresh")
     else:
         print("  → Starting fresh zones.json")
+
+    # ── Ask ONCE which face image to use for preview ─────────
+    all_faces = sorted(
+        glob.glob("output/*/face_cartoon.png") +
+        glob.glob("output/*/face_ready.png"),
+        key=os.path.getmtime,
+        reverse=True
+    )
+
+    face_path = None
+
+    if all_faces:
+        print("\n  ── Face image for preview ──────────────────")
+        print("  Available face images:")
+        for i, path in enumerate(all_faces):
+            folder = os.path.basename(os.path.dirname(path))
+            file   = os.path.basename(path)
+            print(f"  [{i+1}] {folder} — {file}")
+
+        print("\n  Options:")
+        print("  → Type a NUMBER to select from list")
+        print("  → Type a FILE PATH to use a custom image")
+        print("  → Press ENTER to use most recent")
+        choice = input("  Choice: ").strip().strip('"').strip("'")
+
+        if not choice:
+            face_path = all_faces[0]
+            print(f"  → Using most recent: {face_path}")
+        elif choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(all_faces):
+                face_path = all_faces[idx]
+                print(f"  → Using: {face_path}")
+            else:
+                print("  ⚠ Invalid number — using most recent")
+                face_path = all_faces[0]
+        else:
+            if os.path.exists(choice):
+                face_path = choice
+                print(f"  → Using custom image: {face_path}")
+            else:
+                print(f"  ⚠ File not found — using most recent")
+                face_path = all_faces[0]
+    else:
+        print("\n  ⚠ No face images found in output folders.")
+        print("  Enter path to a face image (or press ENTER to skip):")
+        manual = input("  Path: ").strip().strip('"').strip("'")
+        if manual and os.path.exists(manual):
+            face_path = manual
 
     # Define the order of pages to process
     page_order = ["cover_front"] + [f"page_{chr(i)}" for i in range(65, 91)] + ["cover_back"]
@@ -274,7 +321,6 @@ def run_zone_finder():
     for page_key in page_order:
         template_path = os.path.join(TEMPLATES_DIR, f"{page_key}.png")
 
-        # Check if template exists
         if not os.path.exists(template_path):
             print(f"  ⚠ Template not found: {template_path} — skipping")
             continue
@@ -289,66 +335,13 @@ def run_zone_finder():
             else:
                 print(f"  → Redoing {page_key}...")
 
-       # ── Ask user which face image to use for preview ──────
-        import glob as glob_module
-
-        all_faces = sorted(
-            glob_module.glob("output/*/face_cartoon.png") +
-            glob_module.glob("output/*/face_normalized.png") +
-            glob_module.glob("output/*/face_ready.png"),
-            key=os.path.getmtime,
-            reverse=True
-        )
-
-        face_path = None
-
-        if all_faces:
-            print("\n  ── Face image for preview ──────────────────")
-            print("  Available face images:")
-            for i, path in enumerate(all_faces):
-                folder = os.path.basename(os.path.dirname(path))
-                file   = os.path.basename(path)
-                print(f"  [{i+1}] {folder} — {file}")
-
-            print("\n  Options:")
-            print("  → Type a NUMBER to select from list")
-            print("  → Type a FILE PATH to use a custom image")
-            print("  → Press ENTER to use most recent")
-            choice = input("  Choice: ").strip().strip('"').strip("'")
-
-            if not choice:
-                face_path = all_faces[0]
-                print(f"  → Using most recent: {face_path}")
-
-            elif choice.isdigit():
-                idx = int(choice) - 1
-                if 0 <= idx < len(all_faces):
-                    face_path = all_faces[idx]
-                    print(f"  → Using: {face_path}")
-                else:
-                    print("  ⚠ Invalid number — using most recent")
-                    face_path = all_faces[0]
-
-            else:
-                if os.path.exists(choice):
-                    face_path = choice
-                    print(f"  → Using custom image: {face_path}")
-                else:
-                    print(f"  ⚠ File not found — using most recent")
-                    face_path = all_faces[0]
-        else:
-            print("\n  ⚠ No face images found in output folders.")
-            print("  Enter path to a face image (or press ENTER to skip):")
-            manual = input("  Path: ").strip().strip('"').strip("'")
-            if manual and os.path.exists(manual):
-                face_path = manual
         # Get zone for this page with live preview
         zone = get_zone_for_template(
             template_path, page_key,
             zones.get(page_key),
             face_path
         )
-        
+
         if zone:
             zones[page_key] = zone
 

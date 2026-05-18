@@ -2,138 +2,187 @@
 # main.py
 # STORYPHY — Master Pipeline Controller
 # ============================================================
-# This is the ONLY file you need to run to create a book.
+# Pipeline:
+#   1. Face prep   — crop face + remove background (local)
+#   2. Cartoonify  — OpenAI gpt-image-1 Pixar style
+#   3. Compose     — paste cartoon face on all 28 pages
+#   4. Add text    — overlay rhyme text on each page
+#   5. PDF         — assemble final book
 #
-# Usage:
-#   python main.py
-#
-# What it does:
-#   1. Asks for child's name and photo path
-#   2. Runs face_prep.py  — detects, crops, removes background
-#   3. Runs cartoonify.py — applies Pixar-style cartoon effect
-#   4. Runs compositor.py — pastes face + text onto all 28 pages
-#   5. Runs pdf_builder.py — assembles final print-ready PDF
-#
-# Each order gets its own output folder:
-#   output/{child_name}_{timestamp}/
-#       ├── face_ready.png
-#       ├── face_cartoon.png
-#       ├── pages/
-#       └── {child_name}_alphabet_book.pdf
+# IMPORTANT — Step 2 sends the RAW photo to the API (not the
+# processed face_ready.png). This matches what gave good
+# results in ChatGPT. The AI handles cropping/background itself.
 # ============================================================
 
 import os
 import sys
 import time
+import glob
+import json
 import shutil
+import importlib.util
 from datetime import datetime
 
-# ── Add src/ to path so we can import our modules ────────────
+# ── Add src/ to path ─────────────────────────────────────────
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-# ── Load environment variables from .env ─────────────────────
+# ── Load environment variables ───────────────────────────────
 from dotenv import load_dotenv
 load_dotenv()
 
-# ── Import all pipeline modules ───────────────────────────────
+# ── Import pipeline modules ──────────────────────────────────
 from face_prep   import prepare_face
 from cartoonify  import cartoonify_face
 from compositor  import compose_all_pages
 from pdf_builder import build_pdf
 
 
-# ── Helper: Print a nice section banner ──────────────────────
+# ── Helper: Print section banner ─────────────────────────────
 def print_banner(step_num, total_steps, title):
-    print("\n" + "═" * 55)
+    print("\n" + "=" * 55)
     print(f"  STEP {step_num}/{total_steps} — {title}")
-    print("═" * 55)
+    print("=" * 55)
 
 
-# ── Helper: Print final summary ───────────────────────────────
+# ── Helper: Print summary ─────────────────────────────────────
 def print_summary(child_name, output_dir, pdf_path, duration_seconds):
-    print("\n" + "★" * 55)
-    print("  ✅ BOOK CREATED SUCCESSFULLY!")
-    print("★" * 55)
+    print("\n" + "*" * 55)
+    print("  BOOK CREATED SUCCESSFULLY!")
+    print("*" * 55)
     print(f"  Child name : {child_name}")
     print(f"  Output dir : {output_dir}")
     print(f"  PDF file   : {pdf_path}")
     print(f"  Time taken : {duration_seconds:.1f} seconds")
-    print("★" * 55 + "\n")
+    print("*" * 55 + "\n")
+
+
+# ── Step 2 helper: run the chosen cartoonify mode ────────────
+def run_cartoonify(photo_path, face_cartoon_path):
+    """
+    Asks the user which cartoonify mode to use, then runs it.
+
+    Option 1 — call the OpenAI API with the RAW photo (uses credits)
+    Option 2 — reuse an existing face_cartoon.png (free)
+
+    NOTE: option 1 sends the RAW photo (not face_ready.png) —
+    this matches what gave good results in ChatGPT.
+
+    Returns the path to the cartoon face, or None on failure.
+    """
+
+    print("\n  Cartoonify options:")
+    print("  [1] Call OpenAI API      — fresh Pixar face (uses credits)")
+    print("  [2] Reuse existing face  — copy an old result (free)")
+
+    choice = input("  Choice (1 or 2): ").strip()
+
+    # ── Option 1 — call the API with the RAW photo ───────────
+    if choice == "1":
+        print("  -> Mode: API (OpenAI gpt-image-1)")
+        print(f"  -> Sending RAW photo to API: {photo_path}")
+        return cartoonify_face(photo_path, face_cartoon_path)
+
+    # ── Option 2 — reuse an existing cartoon face ────────────
+    elif choice == "2":
+        print("  -> Mode: REUSE (no API, no credits)")
+
+        existing = sorted(
+            glob.glob("output/*/face_cartoon.png"),
+            key=os.path.getmtime,
+            reverse=True
+        )
+
+        if not existing:
+            print("  ERROR: No existing face_cartoon.png found to reuse.")
+            print("  Use option 1 at least once first.")
+            return None
+
+        # Show all available cartoon faces to choose from
+        print("\n  Available cartoon faces:")
+        for i, path in enumerate(existing):
+            folder = os.path.basename(os.path.dirname(path))
+            print(f"  [{i+1}] {folder}")
+
+        print("\n  Enter number to select")
+        print("  (or press ENTER for most recent)")
+        print("  (or paste a custom path to any face_cartoon.png)")
+        face_choice = input("  Choice: ").strip().strip('"').strip("'")
+
+        if not face_choice:
+            selected = existing[0]
+        elif face_choice.isdigit():
+            idx = int(face_choice) - 1
+            selected = existing[idx] if 0 <= idx < len(existing) else existing[0]
+        else:
+            selected = face_choice if os.path.exists(face_choice) else existing[0]
+
+        shutil.copy(selected, face_cartoon_path)
+        print(f"  -> Reusing: {selected}")
+        return face_cartoon_path
+
+    # ── Invalid choice ───────────────────────────────────────
+    else:
+        print("  ERROR: Invalid choice — please enter 1 or 2.")
+        return None
 
 
 # ── Main Pipeline ─────────────────────────────────────────────
 def run_pipeline(child_name, photo_path):
     """
     Runs the full Storyphy book creation pipeline.
-
-    Args:
-        child_name  : child's name as a string
-        photo_path  : path to the child's photo
     """
 
     start_time = time.time()
 
-    print("\n" + "═" * 55)
-    print("  🎨 STORYPHY — Personalized Book Creator")
-    print("  Alphabet Book Pipeline")
-    print("═" * 55)
+    print("\n" + "=" * 55)
+    print("  STORYPHY — Personalized Book Creator")
+    print("=" * 55)
     print(f"  Child name : {child_name}")
     print(f"  Photo      : {photo_path}")
-    print("═" * 55)
+    print("=" * 55)
 
-    # ── Create unique output folder for this order ────────────
-    # Format: output/Emma_20240315_143022/
+    # Create unique output folder
     timestamp  = datetime.now().strftime("%Y%m%d_%H%M%S")
     order_name = f"{child_name.strip().capitalize()}_{timestamp}"
     output_dir = os.path.join("output", order_name)
-
     os.makedirs(output_dir, exist_ok=True)
-    print(f"\n  → Order folder created: {output_dir}")
+    print(f"\n  -> Order folder: {output_dir}")
 
-    # ── Define all file paths for this order ──────────────────
+    # Define paths
     face_ready_path   = os.path.join(output_dir, "face_ready.png")
     face_cartoon_path = os.path.join(output_dir, "face_cartoon.png")
     pages_dir         = os.path.join(output_dir, "pages")
     pdf_path          = os.path.join(output_dir, f"{child_name}_alphabet_book.pdf")
 
     # ══════════════════════════════════════════════════════════
-    # STEP 1 — Face Preparation
+    # STEP 1 — Face Preparation (crop + remove background)
     # ══════════════════════════════════════════════════════════
-    print_banner(1, 4, "Face Detection & Background Removal")
+    # NOTE: face_ready.png is still generated here as a backup /
+    # for inspection, but the API in Step 2 uses the RAW photo.
+    print_banner(1, 5, "Face Detection & Background Removal")
 
     face_result = prepare_face(photo_path, face_ready_path)
 
     if not face_result:
-        print("\n❌ PIPELINE FAILED at Step 1 — Face Preparation")
-        print("   Please check the photo and try again.")
+        print("\nPIPELINE FAILED at Step 1 — Face Preparation")
         return None
 
     # ══════════════════════════════════════════════════════════
-    # STEP 2a — Normalize photo
+    # STEP 2 — Cartoonify (asks: API or reuse)
     # ══════════════════════════════════════════════════════════
-    print_banner(2, 5, "Normalizing Photo")
+    print_banner(2, 5, "Cartoonify Face (OpenAI Pixar Style)")
 
-    from normalize import normalize_photo
+    # IMPORTANT: pass the RAW photo_path, NOT face_ready_path
+    cartoon_result = run_cartoonify(photo_path, face_cartoon_path)
 
-    face_normalized_path = os.path.join(output_dir, "face_normalized.png")
-    normalize_result     = normalize_photo(face_ready_path, face_normalized_path)
-
-    if not normalize_result:
-        print("  ⚠ Normalization failed — using original face")
-        face_normalized_path = face_ready_path
+    if not cartoon_result:
+        print("\nPIPELINE FAILED at Step 2 — Cartoonify")
+        return None
 
     # ══════════════════════════════════════════════════════════
-    # STEP 2b — Cartoonify normalized photo
+    # STEP 3 — Compose pages
     # ══════════════════════════════════════════════════════════
-    print_banner(3, 5, "Cartoonify Face (Pixar Style)")
-
-    # Use normalized face as input instead of raw face
-    cartoon_result = cartoonify_face(face_normalized_path, face_cartoon_path)
-
-    # ══════════════════════════════════════════════════════════
-    # STEP 3 — Compose All Pages
-    # ══════════════════════════════════════════════════════════
-    print_banner(4, 5, "Composing All 28 Pages")
+    print_banner(3, 5, "Composing All 28 Pages")
 
     pages_result = compose_all_pages(
         cartoon_face_path = face_cartoon_path,
@@ -142,34 +191,30 @@ def run_pipeline(child_name, photo_path):
     )
 
     if not pages_result:
-        print("\n❌ PIPELINE FAILED at Step 3 — Page Composition")
-        print("   Check that zones.json exists and templates are in place.")
+        print("\nPIPELINE FAILED at Step 3 — Page Composition")
         return None
-    
 
     # ══════════════════════════════════════════════════════════
-    # STEP 4 — Add text to pages
+    # STEP 4 — Add text
     # ══════════════════════════════════════════════════════════
     print_banner(4, 5, "Adding Rhyme Text to Pages")
 
-    import glob as glob_module
-    import importlib.util
-    spec   = importlib.util.spec_from_file_location(
-                "add_text", 
-                os.path.join("tools", "add_text.py")
-             )
+    # Dynamically load add_text.py from the tools/ folder
+    spec = importlib.util.spec_from_file_location(
+        "add_text",
+        os.path.join("tools", "add_text.py")
+    )
     add_text_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(add_text_mod)
     add_text_to_page = add_text_mod.add_text_to_page
 
     # Load zones
-    import json
     with open("config/zones.json", "r") as f:
         zones = json.load(f)
 
     # Process all composed pages
-    page_files = sorted(glob_module.glob(os.path.join(pages_dir, "*.png")))
-    print(f"  → Adding text to {len(page_files)} pages...")
+    page_files = sorted(glob.glob(os.path.join(pages_dir, "*.png")))
+    print(f"  -> Adding text to {len(page_files)} pages...")
 
     for page_path in page_files:
         filename = os.path.basename(page_path)
@@ -177,8 +222,7 @@ def run_pipeline(child_name, photo_path):
         page_key = parts[1] if len(parts) > 1 else parts[0]
         add_text_to_page(page_path, page_key, child_name, zones)
 
-    print("  ✔ Text added to all pages!\n")
-
+    print("  -> Text added to all pages!\n")
 
     # ══════════════════════════════════════════════════════════
     # STEP 5 — Build PDF
@@ -192,12 +236,9 @@ def run_pipeline(child_name, photo_path):
     )
 
     if not pdf_result:
-        print("\n❌ PIPELINE FAILED at Step 4 — PDF Assembly")
+        print("\nPIPELINE FAILED at Step 5 — PDF Assembly")
         return None
 
-    # ══════════════════════════════════════════════════════════
-    # DONE
-    # ══════════════════════════════════════════════════════════
     duration = time.time() - start_time
     print_summary(child_name, output_dir, pdf_path, duration)
 
@@ -207,48 +248,41 @@ def run_pipeline(child_name, photo_path):
 # ── Entry Point ───────────────────────────────────────────────
 if __name__ == "__main__":
 
-    print("\n" + "═" * 55)
-    print("  🎨 STORYPHY — Personalized Book Creator")
-    print("═" * 55)
+    print("\n" + "=" * 55)
+    print("  STORYPHY — Personalized Book Creator")
+    print("=" * 55)
 
-    # ── Get child's name ──────────────────────────────────────
+    # Get child's name
     child_name = input("\n  Enter child's name: ").strip()
-
     if not child_name:
-        print("  ✖ ERROR: Name cannot be empty.")
+        print("  ERROR: Name cannot be empty.")
         sys.exit(1)
 
-    # ── Get photo path ────────────────────────────────────────
+    # Get photo path
     print("\n  Enter path to child's photo.")
     print("  (or press ENTER to use input/test_child.jpg)")
     photo_input = input("  Photo path: ").strip()
 
-    # Use default test photo if nothing entered
     if not photo_input:
         photo_path = "input/test_child.jpg"
     else:
-        # Remove quotes if user dragged and dropped file
         photo_path = photo_input.strip('"').strip("'")
 
-    # Check photo exists
     if not os.path.exists(photo_path):
-        print(f"\n  ✖ ERROR: Photo not found at: {photo_path}")
-        print("    Make sure the file exists and try again.")
+        print(f"\n  ERROR: Photo not found at: {photo_path}")
         sys.exit(1)
 
-    print(f"\n  ✔ Name  : {child_name}")
-    print(f"  ✔ Photo : {photo_path}")
- 
-    # ── Confirm before running ────────────────────────────────
-    confirm = input("\n  Start creating the book? (y/n): ").strip().lower()
+    print(f"\n  Name  : {child_name}")
+    print(f"  Photo : {photo_path}")
 
+    # Confirm before running
+    confirm = input("\n  Start creating the book? (y/n): ").strip().lower()
     if confirm != "y":
-        print("  → Cancelled.")
+        print("  -> Cancelled.")
         sys.exit(0)
 
-    # ── Run the pipeline ──────────────────────────────────────
+    # Run pipeline
     result = run_pipeline(child_name, photo_path)
-
     if not result:
-        print("\n❌ Book creation failed. Check errors above.")
+        print("\nBook creation failed.")
         sys.exit(1)
