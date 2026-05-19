@@ -5,6 +5,24 @@
       "y": 167,
       "w": 514,
       "h": 445
+    },
+    "rhyme": "",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "cover_back": {
@@ -23,6 +41,7 @@
         50,
         50
       ],
+      "y_position": 880,
       "align": "center",
       "line_spacing": 48,
       "stroke_color": [
@@ -45,6 +64,24 @@
       "y": 330,
       "w": 362,
       "h": 564
+    },
+    "rhyme": "A is for Apple, so shiny and red,\n{name} holds it up and nods their head!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_B": {
@@ -59,6 +96,24 @@
       "y": 286,
       "w": 349,
       "h": 605
+    },
+    "rhyme": "B is for Bear, so fluffy and brown,\n{name} hugs it tight in the whole little town!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_C": {
@@ -73,6 +128,24 @@
       "y": 300,
       "w": 492,
       "h": 594
+    },
+    "rhyme": "C is for Cat, so tiny and sweet,\n{name} pets it gently \u2014 what a treat!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_D": {
@@ -87,6 +160,24 @@
       "y": 297,
       "w": 344,
       "h": 584
+    },
+    "rhyme": "D is for Duck, that goes waddle waddle,\n{name} laughs along at their funny model!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_E": {
@@ -101,6 +192,24 @@
       "y": 373,
       "w": 337,
       "h": 526
+    },
+    "rhyme": "E is for Elephant, big and gray,\n{name} stands beside it on a sunny day!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_F": {
@@ -115,6 +224,24 @@
       "y": 307,
       "w": 338,
       "h": 584
+    },
+    "rhyme": "F is for Flower, so pretty and bright,\n{name} holds a bouquet \u2014 what a sight!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_G": {
@@ -129,6 +256,24 @@
       "y": 531,
       "w": 416,
       "h": 437
+    },
+    "rhyme": "G is for Giraffe, so tall and grand,\n{name} reaches up to hold its hand!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_H": {
@@ -143,6 +288,24 @@
       "y": 539,
       "w": 500,
       "h": 409
+    },
+    "rhyme": "H is for House, so cozy and bright,\n{name} spreads arms wide with pure delight!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_I": {
@@ -157,6 +320,24 @@
       "y": 343,
       "w": 451,
       "h": 600
+    },
+    "rhyme": "I is for Ice Cream, cold and sweet,\n{name} holds a cone \u2014 what a yummy treat!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_J": {
@@ -171,6 +352,24 @@
       "y": 269,
       "w": 391,
       "h": 691
+    },
+    "rhyme": "J is for Jar, full of candy so bright,\n{name} peeks inside with pure delight!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_K": {
@@ -185,6 +384,24 @@
       "y": 462,
       "w": 268,
       "h": 432
+    },
+    "rhyme": "K is for Kite, soaring up high,\n{name} holds the string watching it fly!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_L": {
@@ -199,6 +416,24 @@
       "y": 410,
       "w": 484,
       "h": 520
+    },
+    "rhyme": "L is for Lion, fluffy and small,\n{name} sits beside the friendliest of all!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_M": {
@@ -213,6 +448,24 @@
       "y": 376,
       "w": 567,
       "h": 586
+    },
+    "rhyme": "M is for Moon, glowing at night,\n{name} looks up at its soft silver light!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_N": {
@@ -227,6 +480,24 @@
       "y": 299,
       "w": 572,
       "h": 628
+    },
+    "rhyme": "N is for Nature, so colorful and free,\n{name} walks the path as happy as can be!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_O": {
@@ -241,6 +512,24 @@
       "y": 388,
       "w": 576,
       "h": 528
+    },
+    "rhyme": "O is for Ocean, sparkling and blue,\n{name} sits beside and enjoys the view!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_P": {
@@ -255,6 +544,24 @@
       "y": 443,
       "w": 384,
       "h": 453
+    },
+    "rhyme": "P is for Penguin, in black and white,\n{name} stands beside it \u2014 what a sight!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_Q": {
@@ -269,6 +576,24 @@
       "y": 307,
       "w": 620,
       "h": 628
+    },
+    "rhyme": "Q is for Quiz, who knows the answer today,\n{name} raises a hand and shouts hooray!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_R": {
@@ -283,6 +608,24 @@
       "y": 368,
       "w": 677,
       "h": 537
+    },
+    "rhyme": "R is for Rainbow, after the rain,\n{name} spreads arms wide and smiles again!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_S": {
@@ -297,6 +640,24 @@
       "y": 426,
       "w": 431,
       "h": 379
+    },
+    "rhyme": "S is for Sun, rising so bright,\n{name} opens arms wide to greet the light!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_T": {
@@ -311,6 +672,24 @@
       "y": 521,
       "w": 391,
       "h": 388
+    },
+    "rhyme": "T is for Train, going choo choo choo,\n{name} waves excitedly \u2014 woo hoo hoo!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_U": {
@@ -325,6 +704,24 @@
       "y": 434,
       "w": 490,
       "h": 453
+    },
+    "rhyme": "U is for Umbrella, in the rain,\n{name} splashes in puddles again and again!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_V": {
@@ -339,6 +736,24 @@
       "y": 388,
       "w": 484,
       "h": 476
+    },
+    "rhyme": "V is for Vegetables, fresh from the ground,\n{name} fills up a basket \u2014 the best to be found!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_W": {
@@ -353,6 +768,24 @@
       "y": 579,
       "w": 542,
       "h": 302
+    },
+    "rhyme": "W is for Watermelon, juicy and sweet,\n{name} takes a big slice \u2014 what a summer treat!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_X": {
@@ -367,6 +800,24 @@
       "y": 358,
       "w": 435,
       "h": 388
+    },
+    "rhyme": "X is for Xylophone, ding ding ding,\n{name} taps every bar and loves to sing!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_Y": {
@@ -381,6 +832,24 @@
       "y": 407,
       "w": 264,
       "h": 315
+    },
+    "rhyme": "Y is for Yacht, sailing the sea,\n{name} stands at the bow as happy as can be!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   },
   "page_Z": {
@@ -395,6 +864,24 @@
       "y": 517,
       "w": 427,
       "h": 402
+    },
+    "rhyme": "Z is for Zebra, striped black and white,\n{name} sits beside it \u2014 what a beautiful sight!",
+    "rhyme_style": {
+      "font_size": 36,
+      "font_color": [
+        50,
+        50,
+        50
+      ],
+      "y_position": 880,
+      "align": "center",
+      "line_spacing": 48,
+      "stroke_color": [
+        255,
+        255,
+        255
+      ],
+      "stroke_width": 2
     }
   }
 }

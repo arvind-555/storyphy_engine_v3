@@ -426,54 +426,6 @@ def run_cloud_zone_finder():
     print("  → Now run: python tools/add_text.py")
     print("════════════════════════════════════════\n")
 
-def run_body_zone_finder():
-    """Set body zone (skin area) per page. Saves as 'body_zone'."""
-
-    print("\n========================================")
-    print("  STORYPHY — Body Zone Finder")
-    print("  Draw a rectangle around the BODY")
-    print("  (arms + legs area) on each template.")
-    print("========================================\n")
-
-    zones = {}
-    if os.path.exists(OUTPUT_FILE):
-        with open(OUTPUT_FILE, "r") as f:
-            content = f.read().strip()
-            if content:
-                zones = json.loads(content)
-
-    page_order = [f"page_{chr(i)}" for i in range(65, 91)]
-
-    for page_key in page_order:
-        template_path = os.path.join(TEMPLATES_DIR, f"{page_key}.png")
-        if not os.path.exists(template_path):
-            print(f"  Template not found: {page_key} — skipping")
-            continue
-
-        if page_key in zones and "body_zone" in zones[page_key]:
-            print(f"\n  {page_key} body zone already set.")
-            redo = input("     Redo? (y/n): ").strip().lower()
-            if redo != "y":
-                print(f"  Skipping {page_key}")
-                continue
-
-        print(f"\n  Setting body zone for: {page_key}")
-        zone = get_zone_for_template(
-            template_path, f"{page_key} — DRAW AROUND BODY", None, None
-        )
-
-        if zone and "face_zone" in zone:
-            if page_key not in zones:
-                zones[page_key] = {}
-            zones[page_key]["body_zone"] = zone["face_zone"]
-            os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-            with open(OUTPUT_FILE, "w") as f:
-                json.dump(zones, f, indent=2)
-            print(f"  Body zone saved for {page_key}")
-
-    print("\n  Body zones configured!")    
-
-# ── Run ──────────────────────────────────────────────────────
 if __name__ == "__main__":
 
     print("\n========================================")
@@ -481,16 +433,13 @@ if __name__ == "__main__":
     print("========================================")
     print("  [1] Face placement zones")
     print("  [2] Cloud/text zones")
-    print("  [3] Body zones (for skin recoloring)")
     print("========================================")
 
-    mode = input("  Choice (1/2/3): ").strip()
+    mode = input("  Choice (1/2): ").strip()
 
     if mode == "1":
         run_zone_finder()
     elif mode == "2":
         run_cloud_zone_finder()
-    elif mode == "3":
-        run_body_zone_finder()
     else:
-        print("  Invalid choice — enter 1, 2 or 3")
+        print("  Invalid choice — enter 1,or 2")
