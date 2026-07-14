@@ -73,7 +73,7 @@ def recrop_cartoon_face(cartoon_img):
     # Re-crop with CONSISTENT padding around the detected face
     # These ratios define the fixed framing for every cartoon
     pad_top    = int(fh * 0.85)   # room for hair
-    pad_bottom = int(fh * 0.35)   # short neck stub
+    pad_bottom = int(fh * 0.55)   # short neck stub
     pad_side   = int(fw * 0.30)
 
     img_w, img_h = cartoon_img.size
@@ -83,6 +83,9 @@ def recrop_cartoon_face(cartoon_img):
     y2 = min(img_h, fy + fh + pad_bottom)
 
     cropped = cartoon_img.crop((x1, y1, x2, y2))
+    if cropped.size[0] == 0 or cropped.size[1] == 0:
+        print("  ⚠ Re-crop gave zero size — using original")
+        return cartoon_img
     print(f"  ✔ Cartoon re-cropped to consistent framing: {cropped.size}")
     return cropped
 
@@ -124,38 +127,7 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
     cartoon_face = Image.open(cartoon_face_path).convert("RGBA")
     print(f"  ✔ Cartoon face loaded: {cartoon_face.size}")
 
-    # Re-crop to consistent framing (size lock)
-    cartoon_face = recrop_cartoon_face(cartoon_face)
-
-    # ── Step A: Trim to actual face content ───────────────────
-    # Remove all transparent padding — work only with the
-    # actual face pixels. This is the most important step.
-    bbox = cartoon_face.getbbox()
-    if bbox:
-        cartoon_face = cartoon_face.crop(bbox)
-        print(f"  ✔ Trimmed to content: {cartoon_face.size}")
-    else:
-        print("  ⚠ Face image appears empty — no trim applied")
-
-    # ── Step B: Resize face to exact fixed size ───────────────
-    # After trimming we have the raw face content at different
-    # sizes. We now resize DIRECTLY to a fixed size — no canvas,
-    # no padding — so every face going into the compositor is
-    # exactly the same number of pixels.
-    #
-    # We resize to a fixed HEIGHT (not square) because faces are
-    # always taller than wide. This preserves proportions better.
-    TARGET_HEIGHT = 300  # every face becomes exactly this tall
-
-    face_w, face_h = cartoon_face.size
-    scale          = TARGET_HEIGHT / face_h
-    target_w       = int(face_w * scale)
-    target_h       = TARGET_HEIGHT
-
-    cartoon_face = cartoon_face.resize((target_w, target_h), Image.LANCZOS)
-    print(f"  ✔ Standardized to: {target_w}x{target_h}px")
-
-    # ── Create output directory ───────────────────────────────
+       # ── Create output directory ───────────────────────────────
     os.makedirs(output_dir, exist_ok=True)
 
     # ── Define page order ─────────────────────────────────────
@@ -202,17 +174,17 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
             # aspect ratio — same math every time since the
             # input face is now always STANDARD_FACE_SIZE square
             face_w, face_h = cartoon_face.size
-            FACE_FILL = 0.65   # face fills 75% of zone — lower = smaller
-            scale  = min(fz_w / face_w, fz_h / face_h) * FACE_FILL
-            new_w  = int(face_w * scale)
-            new_h  = int(face_h * scale)
+            scale  = min(fz_w / face_w, fz_h / face_h)
+            new_w  = max(1, int(face_w * scale))
+            new_h  = max(1, int(face_h * scale))
 
             face_resized = cartoon_face.resize((new_w, new_h), Image.LANCZOS)
             face_rgba    = face_resized.convert("RGBA")
 
-            # Center face inside the zone
+            # Align face to top of zone, centered horizontally
+            # (top-align prevents bottom of face being cut off)
             center_x = fz_x + (fz_w - new_w) // 2
-            center_y = fz_y + (fz_h - new_h) // 2
+            center_y = fz_y  # top of zone, not centered vertically
 
             # Paste using the face's own transparency as the mask
             template.paste(face_rgba, (center_x, center_y), face_rgba)

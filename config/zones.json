@@ -1,28 +1,10 @@
 {
   "cover_front": {
     "face_zone": {
-      "x": 346,
-      "y": 167,
-      "w": 514,
-      "h": 445
-    },
-    "rhyme": "",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
+      "x": 467,
+      "y": 257,
+      "w": 274,
+      "h": 354
     }
   },
   "cover_back": {
@@ -54,226 +36,58 @@
   },
   "page_A": {
     "face_zone": {
-      "x": 327,
-      "y": 1,
-      "w": 595,
-      "h": 474
-    },
-    "body_zone": {
-      "x": 451,
-      "y": 330,
-      "w": 362,
-      "h": 564
-    },
-    "rhyme": "A is for Apple, so shiny and red,\n{name} holds it up and nods their head!",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
+      "x": 372,
+      "y": 87,
+      "w": 257,
+      "h": 257
     }
   },
   "page_B": {
     "face_zone": {
-      "x": 366,
-      "y": 3,
+      "x": 365,
+      "y": 1,
       "w": 514,
       "h": 437
-    },
-    "body_zone": {
-      "x": 451,
-      "y": 286,
-      "w": 349,
-      "h": 605
-    },
-    "rhyme": "B is for Bear, so fluffy and brown,\n{name} hugs it tight in the whole little town!",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
     }
   },
   "page_C": {
     "face_zone": {
-      "x": 388,
-      "y": 1,
+      "x": 387,
+      "y": 0,
       "w": 481,
       "h": 446
-    },
-    "body_zone": {
-      "x": 349,
-      "y": 300,
-      "w": 492,
-      "h": 594
-    },
-    "rhyme": "C is for Cat, so tiny and sweet,\n{name} pets it gently \u2014 what a treat!",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
     }
   },
   "page_D": {
     "face_zone": {
-      "x": 402,
+      "x": 376,
       "y": 1,
-      "w": 446,
-      "h": 440
-    },
-    "body_zone": {
-      "x": 459,
-      "y": 297,
-      "w": 344,
-      "h": 584
-    },
-    "rhyme": "D is for Duck, that goes waddle waddle,\n{name} laughs along at their funny model!",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
+      "w": 496,
+      "h": 437
     }
   },
   "page_E": {
     "face_zone": {
-      "x": 529,
-      "y": 28,
-      "w": 569,
-      "h": 481
-    },
-    "body_zone": {
-      "x": 653,
-      "y": 373,
-      "w": 337,
-      "h": 526
-    },
-    "rhyme": "E is for Elephant, big and gray,\n{name} stands beside it on a sunny day!",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
+      "x": 550,
+      "y": 36,
+      "w": 525,
+      "h": 476
     }
   },
   "page_F": {
     "face_zone": {
-      "x": 253,
-      "y": 1,
-      "w": 728,
-      "h": 421
-    },
-    "body_zone": {
-      "x": 468,
-      "y": 307,
-      "w": 338,
-      "h": 584
-    },
-    "rhyme": "F is for Flower, so pretty and bright,\n{name} holds a bouquet \u2014 what a sight!",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
+      "x": 357,
+      "y": 9,
+      "w": 511,
+      "h": 391
     }
   },
   "page_G": {
     "face_zone": {
-      "x": 238,
-      "y": 277,
-      "w": 468,
-      "h": 376
-    },
-    "body_zone": {
-      "x": 294,
-      "y": 531,
-      "w": 416,
-      "h": 437
-    },
-    "rhyme": "G is for Giraffe, so tall and grand,\n{name} reaches up to hold its hand!",
-    "rhyme_style": {
-      "font_size": 36,
-      "font_color": [
-        50,
-        50,
-        50
-      ],
-      "y_position": 880,
-      "align": "center",
-      "line_spacing": 48,
-      "stroke_color": [
-        255,
-        255,
-        255
-      ],
-      "stroke_width": 2
+      "x": 279,
+      "y": 302,
+      "w": 373,
+      "h": 358
     }
   },
   "page_H": {
