@@ -83,62 +83,152 @@ def log_spend(amount):
 # ── Configuration ────────────────────────────────────────────
 
 # Your standard Pixar conversion prompt
-CARTOON_PROMPT = """Convert the uploaded child photo into a Pixar-quality 3D rendered face while STRICTLY preserving the child’s real facial anatomy.
+CARTOON_PROMPT = """Edit the uploaded image.
 
-CRITICAL:
-The child must remain instantly recognizable as the SAME real child.
+This is an image editing task, NOT an image generation task.
 
-Preserve EXACTLY:
-- eye size
-- eye shape
-- eye spacing
-- nose size and structure
-- lip shape
-- cheek structure
-- jawline
-- forehead proportions
-- ear size
-- hairstyle
-- overall head proportions
+The uploaded child is the final character.
 
-DO NOT reinterpret or stylize facial anatomy.
+Do NOT redesign the child.
 
-The goal is:
-REAL facial proportions + Pixar rendering quality.
+Do NOT create a different child.
 
-STYLE REQUIREMENTS:
-- Pixar-quality 3D rendering
-- smooth clean skin shading
-- warm cinematic lighting
-- subtle ambient occlusion
-- soft subsurface scattering
-- clean crisp edges
-- natural skin texture
-- realistic hair strands
-- animated-film material rendering
+Your only job is to convert the rendering style while preserving the child's identity exactly.
 
-IMPORTANT:
-- Keep the eyes the SAME SIZE as the real child
-- Do NOT enlarge the forehead
-- Do NOT enlarge the ears
-- Do NOT shrink the nose
-- Do NOT make cheeks puffier
-- Do NOT make the child look younger
-- Do NOT create baby proportions
-- Do NOT create chibi stylization
-- Do NOT exaggerate expressions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-OUTPUT:
-- transparent PNG
-- ONLY head and very short neck
-- centered composition
-- front-facing portrait
-- no background
-- no shoulders
-- no clothing
-- clean hard edges for compositing
-- no glow
-- no vignette."""
+HIGHEST PRIORITY
+
+Preserve the child's identity with the highest possible accuracy.
+
+The final image must immediately look like the same child.
+
+Preserve exactly:
+
+• Face shape
+• Facial proportions
+• Eye size
+• Eye spacing
+• Eyebrows
+• Nose
+• Lips
+• Smile shape
+• Jawline
+• Chin
+• Forehead
+• Hairline
+• Hairstyle
+• Hair direction
+• Hair texture
+• Ear shape
+• Skin tone
+
+Do NOT enlarge the eyes.
+
+Do NOT reduce the nose.
+
+Do NOT sharpen the jawline.
+
+Do NOT smooth away unique facial features.
+
+Do NOT beautify the child.
+
+Do NOT make the child more "cute."
+
+Do NOT westernize facial features.
+
+Do NOT change ethnicity.
+
+Do NOT change the child's apparent age.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STYLE
+
+Only convert the rendering into a premium semi-realistic 3D children's storybook illustration.
+
+The face geometry must remain unchanged.
+
+Only modify:
+
+• rendering
+• lighting
+• textures
+• materials
+• shading
+
+Do NOT modify facial structure.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXPRESSION
+
+Generate a gentle natural smile.
+
+Keep the smile subtle.
+
+Do not exaggerate it.
+
+Keep the child's natural personality.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CAMERA
+
+Keep exactly the same camera angle as the uploaded photograph.
+
+Keep the face looking directly toward the camera.
+
+Keep the same perspective.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BACKGROUND
+
+Remove the background completely.
+
+Generate a transparent PNG.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+OUTPUT
+
+Generate a perfectly centered square portrait.
+
+Output only:
+
+• Head
+• Hair
+• Ears
+• Neck
+
+Do not generate:
+
+• Shoulders
+• Torso
+• Clothing below the neck
+
+End naturally at the base of the neck.
+
+Leave comfortable transparent padding around the hair.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+QUALITY
+
+Premium semi-realistic Storyphy style.
+
+Soft cinematic lighting.
+
+Natural skin texture.
+
+High-resolution.
+
+Transparent PNG.
+
+Production-ready for compositing into Storyphy templates.
+
+The result should look like the uploaded child illustrated in Storyphy's art style, not a newly generated child."""
 
 # ── Main Function ─────────────────────────────────────────────
 def cartoonify_face(input_path, output_path):

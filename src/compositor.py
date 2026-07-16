@@ -127,7 +127,42 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
     cartoon_face = Image.open(cartoon_face_path).convert("RGBA")
     print(f"  ✔ Cartoon face loaded: {cartoon_face.size}")
 
-       # ── Create output directory ───────────────────────────────
+    # Re-crop to consistent framing — the AI returns inconsistent
+    # head/neck framing per photo (tight head vs head+long neck).
+    # Without this, TARGET_H scaling below standardizes the outer
+    # box but not where the actual face sits within it, causing
+    # per-image size/position drift.
+    cartoon_face = recrop_cartoon_face(cartoon_face)
+
+    # Trim transparent padding
+    bbox = cartoon_face.getbbox()
+    if bbox:
+        cartoon_face = cartoon_face.crop(bbox)
+        print(f"  ✔ Trimmed to content: {cartoon_face.size}")
+
+    # Standardize height
+    TARGET_H = 600
+    face_w, face_h = cartoon_face.size
+    scale = TARGET_H / face_h
+    new_w = int(face_w * scale)
+    face_scaled = cartoon_face.resize((new_w, TARGET_H), Image.LANCZOS)
+
+    # Place on fixed square canvas — CENTERED
+    # This corrects any left/right offset the AI introduced
+    canvas_size = 600
+    canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+    offset_x = (canvas_size - new_w) // 2
+    offset_y = (canvas_size - TARGET_H) // 2
+    canvas.paste(face_scaled, (offset_x, offset_y), face_scaled)
+    cartoon_face = canvas
+    print(f"  ✔ Centered on {canvas_size}x{canvas_size} canvas")
+
+    # NOTE: do NOT re-trim to bbox here — that would undo the
+    # centering we just did and make face size/position vary
+    # per photo (inconsistent hair/tilt/ears in the trimmed box).
+    # Keep the full padded, centered canvas going into the page loop.
+
+    # ── Create output directory ───────────────────────────────
     os.makedirs(output_dir, exist_ok=True)
 
     # ── Define page order ─────────────────────────────────────
@@ -184,7 +219,7 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
             # Align face to top of zone, centered horizontally
             # (top-align prevents bottom of face being cut off)
             center_x = fz_x + (fz_w - new_w) // 2
-            center_y = fz_y  # top of zone, not centered vertically
+            center_y = fz_y + (fz_h - new_h) // 2
 
             # Paste using the face's own transparency as the mask
             template.paste(face_rgba, (center_x, center_y), face_rgba)

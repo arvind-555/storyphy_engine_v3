@@ -343,7 +343,12 @@ def run_zone_finder():
         )
 
         if zone:
-            zones[page_key] = zone
+            # Merge into existing entry — do NOT overwrite the whole
+            # page dict, or previously-saved rhyme/text_zone data
+            # gets wiped out whenever a face zone is redone.
+            if page_key not in zones:
+                zones[page_key] = {}
+            zones[page_key]["face_zone"] = zone["face_zone"]
 
             # Save after every page so progress is never lost
             os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
