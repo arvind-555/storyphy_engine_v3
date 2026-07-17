@@ -83,152 +83,82 @@ def log_spend(amount):
 # ── Configuration ────────────────────────────────────────────
 
 # Your standard Pixar conversion prompt
-CARTOON_PROMPT = """Edit the uploaded image.
+CARTOON_PROMPT = """Transform the uploaded child photo into a premium semi-realistic 3D Storyphy character.
 
-This is an image editing task, NOT an image generation task.
+This is an image transformation task, NOT a re-imagination task.
 
-The uploaded child is the final character.
+The uploaded photo is the ONLY identity reference.
 
-Do NOT redesign the child.
-
-Do NOT create a different child.
-
-Your only job is to convert the rendering style while preserving the child's identity exactly.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-HIGHEST PRIORITY
-
-Preserve the child's identity with the highest possible accuracy.
-
-The final image must immediately look like the same child.
-
-Preserve exactly:
-
+Preserve the child's exact identity, including:
 • Face shape
-• Facial proportions
-• Eye size
-• Eye spacing
+• Eyes
 • Eyebrows
 • Nose
 • Lips
-• Smile shape
-• Jawline
-• Chin
-• Forehead
-• Hairline
-• Hairstyle
-• Hair direction
-• Hair texture
-• Ear shape
+• Smile
+• Hair
+• Ears
 • Skin tone
+• Age
 
-Do NOT enlarge the eyes.
+Do NOT beautify, stylize, or alter the child's facial proportions.
 
-Do NOT reduce the nose.
+Create a premium semi-realistic 3D storybook illustration with soft cinematic lighting, Pixar-quality rendering, smooth natural skin, and luxury children's book quality.
 
-Do NOT sharpen the jawline.
-
-Do NOT smooth away unique facial features.
-
-Do NOT beautify the child.
-
-Do NOT make the child more "cute."
-
-Do NOT westernize facial features.
-
-Do NOT change ethnicity.
-
-Do NOT change the child's apparent age.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-STYLE
-
-Only convert the rendering into a premium semi-realistic 3D children's storybook illustration.
-
-The face geometry must remain unchanged.
-
-Only modify:
-
-• rendering
-• lighting
-• textures
-• materials
-• shading
-
-Do NOT modify facial structure.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-EXPRESSION
-
-Generate a gentle natural smile.
-
-Keep the smile subtle.
-
-Do not exaggerate it.
-
-Keep the child's natural personality.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CAMERA
-
-Keep exactly the same camera angle as the uploaded photograph.
-
-Keep the face looking directly toward the camera.
-
-Keep the same perspective.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The child must face directly forward with a centered, upright head and a natural happy smile.
 
 BACKGROUND
+• Transparent background only.
+• No shadows.
+• No outline.
+• No glow.
 
-Remove the background completely.
+NECK (CRITICAL)
 
-Generate a transparent PNG.
+Generate only the head and neck.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The neck should be straight, centered, and maintain nearly the same width from beneath the jaw to the bottom.
+
+Terminate the neck in a small, smooth oval.
+
+Do NOT generate:
+• Shoulders
+• Shoulder curves
+• Trapezius muscles
+• Collarbones
+• Upper chest
+• Side extensions
+• Neck widening toward the bottom
+
+The output must resemble a clean production-ready head asset, not a portrait or bust.
+
+Do NOT generate:
+• Shoulders
+• Collarbones
+• Upper chest
+• Trapezius muscles
+• Neck-to-shoulder transitions
+• Side extensions beside the neck
+
+The widest part below the jaw should be the neck itself.
+
+The output must end before the shoulders begin.
+
+The neck should fit naturally into a Storyphy character template without requiring additional editing.
 
 OUTPUT
 
-Generate a perfectly centered square portrait.
+• Square image
+• Transparent PNG
+• Complete hair
+• Complete ears
+• Complete neck
+• Head centered
+• Comfortable padding around the head
+• Premium production-ready quality
 
-Output only:
-
-• Head
-• Hair
-• Ears
-• Neck
-
-Do not generate:
-
-• Shoulders
-• Torso
-• Clothing below the neck
-
-End naturally at the base of the neck.
-
-Leave comfortable transparent padding around the hair.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-QUALITY
-
-Premium semi-realistic Storyphy style.
-
-Soft cinematic lighting.
-
-Natural skin texture.
-
-High-resolution.
-
-Transparent PNG.
-
-Production-ready for compositing into Storyphy templates.
-
-The result should look like the uploaded child illustrated in Storyphy's art style, not a newly generated child."""
+The style should change.
+The child's identity should NOT."""
 
 # ── Main Function ─────────────────────────────────────────────
 def cartoonify_face(input_path, output_path):
