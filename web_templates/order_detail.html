@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+  <a href="{{ url_for('order_history') }}">&larr; Back to Order History</a>
+  <h1>{{ order.child }}'s Book</h1>
+
+  {% if order.pdf %}
+    <a class="btn" href="{{ url_for('download_file', filepath=order.pdf.replace('output/', '', 1)) }}">⬇️ Download PDF</a>
+  {% else %}
+    <p class="muted">No PDF found for this order.</p>
+  {% endif %}
+
+  <h3>Pages</h3>
+  <div class="grid">
+    {% for p in order.pages %}
+      <img src="{{ url_for('serve_file', filepath=p.replace('output/', '', 1)) }}">
+    {% endfor %}
+  </div>
+{% endblock %}

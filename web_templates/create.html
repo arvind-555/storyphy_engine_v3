@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Create a New Storyphy Book</h1>
+
+  <form class="card" method="POST" enctype="multipart/form-data" id="createForm">
+    <label for="child_name">Child's name</label>
+    <input type="text" id="child_name" name="child_name" required>
+
+    <label>Cartoon face</label>
+    <div class="radio-group">
+      <label>
+        <input type="radio" name="mode" value="generate" checked onclick="toggleMode()">
+        Generate new (calls OpenAI API — ~$0.19)
+      </label>
+      <label>
+        <input type="radio" name="mode" value="reuse" onclick="toggleMode()">
+        Reuse an existing cartoon face
+      </label>
+    </div>
+
+    <div id="generateBlock">
+      <label for="photo">Child's photo (upload)</label>
+      <input type="file" id="photo" name="photo" accept="image/*">
+
+      <label for="photo_path">— or paste a file path instead —</label>
+      <input type="text" id="photo_path" name="photo_path" placeholder="e.g. D:\Photos\child.jpg">
+      <p class="muted">If both are filled, the uploaded file takes priority.</p>
+    </div>
+
+    <div id="reuseBlock" style="display:none;">
+      <label for="reuse_select">Pick from a previous order</label>
+      <select id="reuse_select" name="reuse_select">
+        <option value="">-- select --</option>
+        {% for f in existing_faces %}
+          <option value="{{ f.path }}">{{ f.label }}</option>
+        {% endfor %}
+      </select>
+      {% if not existing_faces %}
+        <p class="muted">No existing cartoon faces found in past orders.</p>
+      {% endif %}
+
+      <label for="reuse_path_input">...or paste a file path to any cartoon face image on this machine</label>
+      <input type="text" id="reuse_path_input" name="reuse_path_input" placeholder="e.g. D:\Faces\emma_cartoon.png">
+      <p class="muted">If both are filled, the pasted path takes priority.</p>
+    </div>
+
+    <button type="submit" id="submitBtn">🚀 Create Book</button>
+    <p class="muted" id="progressNote" style="display:none;">
+      Running the pipeline — this can take 30–90 seconds. Please don't close this tab.
+    </p>
+  </form>
+
+  <script>
+    function toggleMode() {
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      document.getElementById('generateBlock').style.display = (mode === 'generate') ? 'block' : 'none';
+      document.getElementById('reuseBlock').style.display = (mode === 'reuse') ? 'block' : 'none';
+    }
+    document.getElementById('createForm').addEventListener('submit', function() {
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('submitBtn').innerText = 'Creating book...';
+      document.getElementById('progressNote').style.display = 'block';
+    });
+  </script>
+{% endblock %}

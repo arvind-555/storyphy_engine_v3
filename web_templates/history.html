@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Order History</h1>
+
+  <form class="card" method="GET" style="margin-bottom: 20px;">
+    <label for="search">Search by child name</label>
+    <input type="text" id="search" name="search" value="{{ search }}" placeholder="e.g. Emma">
+    <button type="submit">Search</button>
+  </form>
+
+  <p class="muted">{{ orders|length }} order(s)</p>
+
+  {% if not orders %}
+    <div class="card">No books found.</div>
+  {% endif %}
+
+  {% for order in orders %}
+    <div class="card order-row">
+      {% if order.cover %}
+        <img src="{{ url_for('serve_file', filepath=order.cover.replace('output/', '', 1)) }}">
+      {% else %}
+        <div class="muted">No cover</div>
+      {% endif %}
+      <div style="flex:1;">
+        <strong>{{ order.child }}</strong><br>
+        <span class="muted">{{ order.modified.strftime('%d %b %Y, %I:%M %p') }}</span><br>
+        <a href="{{ url_for('order_detail', order_name=order.name) }}">View pages</a>
+        {% if order.pdf %}
+          &nbsp;|&nbsp;
+          <a href="{{ url_for('download_file', filepath=order.pdf.replace('output/', '', 1)) }}">Download PDF</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+{% endblock %}
