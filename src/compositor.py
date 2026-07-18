@@ -66,21 +66,25 @@ def recrop_cartoon_face(cartoon_img):
             print("  ⚠ No face found in cartoon — using as-is")
             return cartoon_img
 
-        bbox = results.detections[0].bounding_box
-        fx, fy = bbox.origin_x, bbox.origin_y
-        fw, fh = bbox.width, bbox.height
-
-    # Re-crop with CONSISTENT padding around the detected face
-    # These ratios define the fixed framing for every cartoon
-    pad_top    = int(fh * 0.85)   # room for hair
-    pad_bottom = int(fh * 0.55)   # short neck stub
-    pad_side   = int(fw * 0.30)
+        keypoints = results.detections[0].keypoints
+        right_eye, left_eye = keypoints[0], keypoints[1]
 
     img_w, img_h = cartoon_img.size
-    x1 = max(0, fx - pad_side)
-    y1 = max(0, fy - pad_top)
-    x2 = min(img_w, fx + fw + pad_side)
-    y2 = min(img_h, fy + fh + pad_bottom)
+    rx, ry = right_eye.x * img_w, right_eye.y * img_h
+    lx, ly = left_eye.x * img_w, left_eye.y * img_h
+    eye_dist = ((lx - rx) ** 2 + (ly - ry) ** 2) ** 0.5
+    eye_cx, eye_cy = (lx + rx) / 2, (ly + ry) / 2
+
+    # Crop relative to eye distance — stable regardless of hair/expression,
+    # unlike the bounding box which shifts with hairstyle/framing
+    half_w        = eye_dist * 2.2
+    top_margin    = eye_dist * 2.0
+    bottom_margin = eye_dist * 3.0
+
+    x1 = max(0, int(eye_cx - half_w))
+    y1 = max(0, int(eye_cy - top_margin))
+    x2 = min(img_w, int(eye_cx + half_w))
+    y2 = min(img_h, int(eye_cy + bottom_margin))
 
     cropped = cartoon_img.crop((x1, y1, x2, y2))
     if cropped.size[0] == 0 or cropped.size[1] == 0:
@@ -218,8 +222,10 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
 
             # Align face to top of zone, centered horizontally
             # (top-align prevents bottom of face being cut off)
+            # Bottom-align so chin consistently meets the body
+            # illustration below it, instead of floating centered
             center_x = fz_x + (fz_w - new_w) // 2
-            center_y = fz_y + (fz_h - new_h) // 2
+            center_y = fz_y + fz_h - new_h
 
             # Paste using the face's own transparency as the mask
             template.paste(face_rgba, (center_x, center_y), face_rgba)

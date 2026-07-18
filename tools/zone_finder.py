@@ -56,6 +56,18 @@ def mouse_callback(event, x, y, flags, param):
         rect_drawn = True
 
 
+# ── Global variables for point selection (neck anchor) ──────
+point_x, point_y = 0, 0
+point_set = False
+
+def point_callback(event, x, y, flags, param):
+    """Handles a single click to mark a point (e.g. neck anchor)."""
+    global point_x, point_y, point_set
+    if event == cv2.EVENT_LBUTTONDOWN:
+        point_x, point_y = x, y
+        point_set = True
+
+
 def get_zone_for_template(template_path, page_key, existing_zone=None, face_path=None):
     """
     Opens a template and lets user draw the face zone.
@@ -233,6 +245,59 @@ def get_zone_for_template(template_path, page_key, existing_zone=None, face_path
         elif key == ord('r'):
             rect_drawn = False
             print("  → Rectangle reset. Draw again.")
+
+        elif key == ord('q'):
+            print(f"  → Skipped {page_key}")
+            cv2.destroyWindow(window_name)
+            return None
+
+
+def get_point_for_template(template_path, page_key):
+    """
+    Opens a template and lets user click ONE point —
+    used for marking the neck anchor (where the chin/neck
+    of the pasted face should land).
+    """
+    global point_x, point_y, point_set
+    point_set = False
+
+    image = cv2.imread(template_path)
+    if image is None:
+        print(f"  ✖ Could not load {template_path}")
+        return None
+
+    img_h, img_w = image.shape[:2]
+    display_scale = min(800 / img_w, 800 / img_h, 1.0)
+    display_w = int(img_w * display_scale)
+    display_h = int(img_h * display_scale)
+
+    window_name = f"Neck Anchor — {page_key}"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(window_name, display_w, display_h)
+    cv2.setMouseCallback(window_name, point_callback)
+
+    print(f"\n  → {page_key}: CLICK where the neck/chin should sit")
+    print("  → ENTER to confirm | Q to skip")
+
+    while True:
+        display = cv2.resize(image, (display_w, display_h))
+        cv2.rectangle(display, (0, 0), (display_w, 40), (30, 30, 30), -1)
+        cv2.putText(display, f"{page_key} — Click neck/chin point",
+                    (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+
+        if point_set:
+            cv2.circle(display, (point_x, point_y), 8, (0, 255, 0), -1)
+            cv2.circle(display, (point_x, point_y), 12, (0, 255, 0), 2)
+
+        cv2.imshow(window_name, display)
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == 13 and point_set:
+            actual_x = int(point_x / display_scale)
+            actual_y = int(point_y / display_scale)
+            print(f"  ✔ Neck anchor confirmed: x={actual_x}, y={actual_y}")
+            cv2.destroyWindow(window_name)
+            return {"x": actual_x, "y": actual_y}
 
         elif key == ord('q'):
             print(f"  → Skipped {page_key}")
@@ -431,6 +496,50 @@ def run_cloud_zone_finder():
     print("  → Now run: python tools/add_text.py")
     print("════════════════════════════════════════\n")
 
+def run_neck_anchor_finder():
+    """
+    Separate pass to mark the neck/chin anchor point per page.
+    Saves as 'neck_anchor' in zones.json.
+    """
+    print("\n════════════════════════════════════════")
+    print("  STORYPHY — Neck Anchor Finder")
+    print("════════════════════════════════════════")
+
+    zones = {}
+    if os.path.exists(OUTPUT_FILE):
+        with open(OUTPUT_FILE, "r") as f:
+            content = f.read().strip()
+            if content:
+                zones = json.loads(content)
+
+    page_order = [f"page_{chr(i)}" for i in range(65, 91)]
+
+    for page_key in page_order:
+        template_path = os.path.join(TEMPLATES_DIR, f"{page_key}.png")
+        if not os.path.exists(template_path):
+            print(f"  ⚠ Template not found: {template_path} — skipping")
+            continue
+
+        if page_key in zones and "neck_anchor" in zones[page_key]:
+            redo = input(f"  {page_key} already set. Redo? (y/n): ").strip().lower()
+            if redo != "y":
+                continue
+
+        point = get_point_for_template(template_path, page_key)
+
+        if point:
+            if page_key not in zones:
+                zones[page_key] = {}
+            zones[page_key]["neck_anchor"] = point
+
+            os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+            with open(OUTPUT_FILE, "w") as f:
+                json.dump(zones, f, indent=2)
+            print(f"  ✔ Saved ({len(zones)} pages total)")
+
+    print("\n  ✔ Neck anchors configured!\n")
+
+
 if __name__ == "__main__":
 
     print("\n========================================")
@@ -438,13 +547,16 @@ if __name__ == "__main__":
     print("========================================")
     print("  [1] Face placement zones")
     print("  [2] Cloud/text zones")
+    print("  [3] Neck anchor points")
     print("========================================")
 
-    mode = input("  Choice (1/2): ").strip()
+    mode = input("  Choice (1/2/3): ").strip()
 
     if mode == "1":
         run_zone_finder()
     elif mode == "2":
         run_cloud_zone_finder()
+    elif mode == "3":
+        run_neck_anchor_finder()
     else:
-        print("  Invalid choice — enter 1,or 2")
+        print("  Invalid choice — enter 1, 2, or 3")
