@@ -59,11 +59,14 @@ def mouse_callback(event, x, y, flags, param):
 # ── Global variables for point selection (neck anchor) ──────
 point_x, point_y = 0, 0
 point_set = False
+hover_x, hover_y = 0, 0
 
 def point_callback(event, x, y, flags, param):
-    """Handles a single click to mark a point (e.g. neck anchor)."""
-    global point_x, point_y, point_set
-    if event == cv2.EVENT_LBUTTONDOWN:
+    """Handles mouse move (live preview) + click to confirm a point."""
+    global point_x, point_y, point_set, hover_x, hover_y
+    if event == cv2.EVENT_MOUSEMOVE:
+        hover_x, hover_y = x, y
+    elif event == cv2.EVENT_LBUTTONDOWN:
         point_x, point_y = x, y
         point_set = True
 
@@ -95,6 +98,11 @@ def get_zone_for_template(template_path, page_key, existing_zone=None, face_path
         import numpy as np
 
         pil_face = PILImage.open(face_path).convert("RGBA")
+        # Trim transparent padding — MUST match compositor.py's
+        # trim, or preview position won't match actual render
+        bbox = pil_face.getbbox()
+        if bbox:
+            pil_face = pil_face.crop(bbox)
         face_img_bgra = cv2.cvtColor(
             np.array(pil_face), cv2.COLOR_RGBA2BGRA
         )
@@ -252,13 +260,58 @@ def get_zone_for_template(template_path, page_key, existing_zone=None, face_path
             return None
 
 
-def get_point_for_template(template_path, page_key):
+def locate_chin_for_preview(face_img_bgra):
+    """
+    Same chin-detection logic as compositor.py's locate_chin(),
+    adapted for the zone_finder preview image (BGRA numpy array).
+    Returns (eye_cx, chin_y) in the ORIGINAL face image's pixel
+    coordinates (before any preview scaling).
+    Falls back to (horizontal center, bottom edge) if no face found.
+    """
+    import mediapipe as mp
+    from mediapipe.tasks.python import vision as mp_vision
+    from mediapipe.tasks.python.core.base_options import BaseOptions
+
+    h, w = face_img_bgra.shape[:2]
+    rgb_array = cv2.cvtColor(face_img_bgra, cv2.COLOR_BGRA2RGB)
+
+    model_path = "config/blaze_face_short_range.tflite"
+    if not os.path.exists(model_path):
+        return w / 2, h
+
+    base_options = BaseOptions(model_asset_path=model_path)
+    options = mp_vision.FaceDetectorOptions(
+        base_options=base_options, min_detection_confidence=0.4
+    )
+    with mp_vision.FaceDetector.create_from_options(options) as detector:
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_array)
+        results = detector.detect(mp_image)
+
+        if not results.detections:
+            return w / 2, h
+
+        kp = results.detections[0].keypoints
+        rx, ry = kp[0].x * w, kp[0].y * h
+        lx, ly = kp[1].x * w, kp[1].y * h
+        eye_dist = ((lx - rx) ** 2 + (ly - ry) ** 2) ** 0.5
+        eye_cx, eye_cy = (lx + rx) / 2, (ly + ry) / 2
+
+    # Must match CHIN_OFFSET_RATIO in compositor.py
+    chin_y = eye_cy + (eye_dist * 2.1)
+    return eye_cx, chin_y
+
+
+def get_point_for_template(template_path, page_key, face_path=None):
     """
     Opens a template and lets user click ONE point —
     used for marking the neck anchor (where the chin/neck
     of the pasted face should land).
+
+    If face_path is given, shows a live preview of the child's
+    cartoon face following the cursor, bottom-aligned to the
+    current point, so you can see exactly how it'll sit.
     """
-    global point_x, point_y, point_set
+    global point_x, point_y, point_set, hover_x, hover_y
     point_set = False
 
     image = cv2.imread(template_path)
@@ -270,14 +323,34 @@ def get_point_for_template(template_path, page_key):
     display_scale = min(800 / img_w, 800 / img_h, 1.0)
     display_w = int(img_w * display_scale)
     display_h = int(img_h * display_scale)
+    hover_x, hover_y = display_w // 2, display_h // 2
+
+    # ── Load face image for live preview ──────────────────────
+    face_img_bgra = None
+    if face_path and os.path.exists(face_path):
+        from PIL import Image as PILImage
+        import numpy as np
+        pil_face = PILImage.open(face_path).convert("RGBA")
+        bbox = pil_face.getbbox()
+        if bbox:
+            pil_face = pil_face.crop(bbox)
+        face_img_bgra = cv2.cvtColor(np.array(pil_face), cv2.COLOR_RGBA2BGRA)
+
+    chin_eye_cx = chin_chin_y = None
+    if face_img_bgra is not None:
+        print("  → Detecting face for accurate preview...")
+        chin_eye_cx, chin_chin_y = locate_chin_for_preview(face_img_bgra)
 
     window_name = f"Neck Anchor — {page_key}"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, display_w, display_h)
     cv2.setMouseCallback(window_name, point_callback)
 
-    print(f"\n  → {page_key}: CLICK where the neck/chin should sit")
+    print(f"\n  → {page_key}: MOVE mouse to preview, CLICK to place neck/chin point")
     print("  → ENTER to confirm | Q to skip")
+
+    # Preview face width — a fixed fraction of the template width
+    preview_w = int(display_w * 0.22)
 
     while True:
         display = cv2.resize(image, (display_w, display_h))
@@ -285,9 +358,41 @@ def get_point_for_template(template_path, page_key):
         cv2.putText(display, f"{page_key} — Click neck/chin point",
                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
-        if point_set:
-            cv2.circle(display, (point_x, point_y), 8, (0, 255, 0), -1)
-            cv2.circle(display, (point_x, point_y), 12, (0, 255, 0), 2)
+        preview_x = point_x if point_set else hover_x
+        preview_y = point_y if point_set else hover_y
+
+        # ── Live face preview, bottom-center aligned to point ──
+        if face_img_bgra is not None:
+            fh_orig, fw_orig = face_img_bgra.shape[:2]
+            scale_face = preview_w / fw_orig
+            new_fw = preview_w
+            new_fh = int(fh_orig * scale_face)
+
+            offset_x = preview_x - new_fw // 2
+            if chin_chin_y is not None:
+                scale_ratio = new_fh / fh_orig
+                offset_x = int(preview_x - chin_eye_cx * scale_ratio)
+                offset_y = int(preview_y - chin_chin_y * scale_ratio)
+            else:
+                offset_y = preview_y - new_fh  # fallback: bottom of face at the point
+
+            if (offset_x >= 0 and offset_y >= 0 and
+                offset_x + new_fw <= display_w and
+                offset_y + new_fh <= display_h and
+                new_fw > 0 and new_fh > 0):
+
+                face_resized = cv2.resize(face_img_bgra, (new_fw, new_fh))
+                face_bgr = face_resized[:, :, :3]
+                face_alpha = face_resized[:, :, 3:4] / 255.0
+
+                roi = display[offset_y:offset_y + new_fh, offset_x:offset_x + new_fw]
+                blended = (face_bgr * face_alpha + roi * (1 - face_alpha)).astype('uint8')
+                display[offset_y:offset_y + new_fh, offset_x:offset_x + new_fw] = blended
+
+        # ── Mark the point itself ───────────────────────────────
+        color = (0, 255, 0) if point_set else (0, 200, 255)
+        cv2.circle(display, (preview_x, preview_y), 6, color, -1)
+        cv2.circle(display, (preview_x, preview_y), 10, color, 2)
 
         cv2.imshow(window_name, display)
         key = cv2.waitKey(1) & 0xFF
@@ -303,6 +408,181 @@ def get_point_for_template(template_path, page_key):
             print(f"  → Skipped {page_key}")
             cv2.destroyWindow(window_name)
             return None
+
+
+def get_zone_and_anchor_for_template(template_path, page_key, existing_zone=None, face_path=None):
+    """
+    Combined tool: PHASE 1 — drag to set face SIZE (face_zone).
+    PHASE 2 — click to set the neck/chin POSITION (neck_anchor).
+    Both are set in one pass per page and saved together.
+
+    The preview in Phase 2 uses the SAME sizing as Phase 1's
+    locked zone, and anchors the face's bottom edge to the
+    clicked point — matching exactly how compositor.py places
+    the face (no detection, bottom edge = neck/chin).
+    """
+    global start_x, start_y, end_x, end_y, rect_drawn, drawing
+    global point_x, point_y, point_set, hover_x, hover_y
+
+    image = cv2.imread(template_path)
+    if image is None:
+        print(f"  ✖ Could not load {template_path}")
+        return None
+
+    img_h, img_w = image.shape[:2]
+    display_scale = min(800 / img_w, 800 / img_h, 1.0)
+    display_w = int(img_w * display_scale)
+    display_h = int(img_h * display_scale)
+
+    face_img_bgra = None
+    if face_path and os.path.exists(face_path):
+        from PIL import Image as PILImage
+        import numpy as np
+        pil_face = PILImage.open(face_path).convert("RGBA")
+        # Trim transparent padding — MUST match compositor.py's
+        # trim exactly, or the point you click here won't match
+        # where the face actually lands in the real output
+        bbox = pil_face.getbbox()
+        if bbox:
+            pil_face = pil_face.crop(bbox)
+        face_img_bgra = cv2.cvtColor(np.array(pil_face), cv2.COLOR_RGBA2BGRA)
+    else:
+        print("  ⚠ No face image found — preview will show outline only")
+
+    window_name = f"Zone + Anchor — {page_key}"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(window_name, display_w, display_h)
+
+    rect_drawn = False
+    if existing_zone and "face_zone" in existing_zone:
+        fz = existing_zone["face_zone"]
+        start_x = int(fz["x"] * display_scale)
+        start_y = int(fz["y"] * display_scale)
+        end_x   = int((fz["x"] + fz["w"]) * display_scale)
+        end_y   = int((fz["y"] + fz["h"]) * display_scale)
+        rect_drawn = True
+
+    phase = 1  # 1 = draw rectangle (size), 2 = click point (position)
+    cv2.setMouseCallback(window_name, mouse_callback)
+
+    print(f"\n  → {page_key}: PHASE 1 — DRAG to set face SIZE")
+    print("  → ENTER = lock size  |  R = redraw  |  Q = skip")
+
+    final_zone = None
+    point_set = False
+    hover_x, hover_y = display_w // 2, display_h // 2
+
+    while True:
+        display = cv2.resize(image, (display_w, display_h))
+        cv2.rectangle(display, (0, 0), (display_w, 58), (30, 30, 30), -1)
+
+        if phase == 1:
+            cv2.putText(display, f"{page_key} — PHASE 1: Drag to set face SIZE",
+                        (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            cv2.putText(display, "ENTER = lock size  |  R = redraw  |  Q = skip",
+                        (10, 44), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
+
+            if rect_drawn or drawing:
+                x1, y1 = min(start_x, end_x), min(start_y, end_y)
+                x2, y2 = max(start_x, end_x), max(start_y, end_y)
+                zone_w, zone_h = x2 - x1, y2 - y1
+
+                if zone_w > 10 and zone_h > 10:
+                    if face_img_bgra is not None:
+                        fh_o, fw_o = face_img_bgra.shape[:2]
+                        sc = min(zone_w / fw_o, zone_h / fh_o)
+                        nfw, nfh = int(fw_o * sc), int(fh_o * sc)
+                        ox = x1 + (zone_w - nfw) // 2
+                        oy = y1 + (zone_h - nfh) // 2
+                        if (ox >= 0 and oy >= 0 and ox + nfw <= display_w
+                                and oy + nfh <= display_h and nfw > 0 and nfh > 0):
+                            face_resized = cv2.resize(face_img_bgra, (nfw, nfh))
+                            face_bgr = face_resized[:, :, :3]
+                            face_alpha = face_resized[:, :, 3:4] / 255.0
+                            roi = display[oy:oy + nfh, ox:ox + nfw]
+                            blended = (face_bgr * face_alpha + roi * (1 - face_alpha)).astype('uint8')
+                            display[oy:oy + nfh, ox:ox + nfw] = blended
+
+                    cv2.rectangle(display, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    aw, ah = int(zone_w / display_scale), int(zone_h / display_scale)
+                    cv2.putText(display, f"{aw} x {ah} px", (x1 + 4, y2 - 8),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+            cv2.imshow(window_name, display)
+            key = cv2.waitKey(1) & 0xFF
+
+            if key == 13 and rect_drawn:
+                x1, y1 = min(start_x, end_x), min(start_y, end_y)
+                x2, y2 = max(start_x, end_x), max(start_y, end_y)
+                if (x2 - x1) > 10 and (y2 - y1) > 10:
+                    actual_x = int(x1 / display_scale)
+                    actual_y = int(y1 / display_scale)
+                    actual_w = int((x2 - x1) / display_scale)
+                    actual_h = int((y2 - y1) / display_scale)
+                    final_zone = {"x": actual_x, "y": actual_y, "w": actual_w, "h": actual_h}
+                    print(f"  ✔ Size locked: {actual_w}x{actual_h}")
+                    print(f"  → {page_key}: PHASE 2 — CLICK where the neck/chin should sit")
+                    print("  → ENTER = confirm  |  B = back to size  |  Q = skip")
+                    phase = 2
+                    point_set = False
+                    cv2.setMouseCallback(window_name, point_callback)
+            elif key == ord('r'):
+                rect_drawn = False
+                print("  → Rectangle reset. Draw again.")
+            elif key == ord('q'):
+                print(f"  → Skipped {page_key}")
+                cv2.destroyWindow(window_name)
+                return None
+
+        else:  # phase == 2
+            cv2.putText(display, f"{page_key} — PHASE 2: Click neck/chin point",
+                        (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            cv2.putText(display, "ENTER = confirm  |  B = back to size  |  Q = skip",
+                        (10, 44), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
+
+            preview_x = point_x if point_set else hover_x
+            preview_y = point_y if point_set else hover_y
+
+            zone_w = int(final_zone["w"] * display_scale)
+            zone_h = int(final_zone["h"] * display_scale)
+
+            if face_img_bgra is not None:
+                fh_o, fw_o = face_img_bgra.shape[:2]
+                sc = min(zone_w / fw_o, zone_h / fh_o)
+                nfw, nfh = max(1, int(fw_o * sc)), max(1, int(fh_o * sc))
+                ox = preview_x - nfw // 2
+                oy = preview_y - nfh  # bottom edge = clicked point (matches compositor.py)
+
+                if (ox >= 0 and oy >= 0 and ox + nfw <= display_w
+                        and oy + nfh <= display_h and nfw > 0 and nfh > 0):
+                    face_resized = cv2.resize(face_img_bgra, (nfw, nfh))
+                    face_bgr = face_resized[:, :, :3]
+                    face_alpha = face_resized[:, :, 3:4] / 255.0
+                    roi = display[oy:oy + nfh, ox:ox + nfw]
+                    blended = (face_bgr * face_alpha + roi * (1 - face_alpha)).astype('uint8')
+                    display[oy:oy + nfh, ox:ox + nfw] = blended
+
+            color = (0, 255, 0) if point_set else (0, 200, 255)
+            cv2.circle(display, (preview_x, preview_y), 6, color, -1)
+            cv2.circle(display, (preview_x, preview_y), 10, color, 2)
+
+            cv2.imshow(window_name, display)
+            key = cv2.waitKey(1) & 0xFF
+
+            if key == 13 and point_set:
+                actual_x = int(point_x / display_scale)
+                actual_y = int(point_y / display_scale)
+                print(f"  ✔ Neck anchor confirmed: x={actual_x}, y={actual_y}")
+                cv2.destroyWindow(window_name)
+                return {"face_zone": final_zone, "neck_anchor": {"x": actual_x, "y": actual_y}}
+            elif key == ord('b'):
+                phase = 1
+                cv2.setMouseCallback(window_name, mouse_callback)
+                print(f"  → {page_key}: back to PHASE 1 — Drag to set face SIZE")
+            elif key == ord('q'):
+                print(f"  → Skipped {page_key}")
+                cv2.destroyWindow(window_name)
+                return None
 
 
 def run_zone_finder():
@@ -512,6 +792,36 @@ def run_neck_anchor_finder():
             if content:
                 zones = json.loads(content)
 
+    # ── Ask which face image to use for live preview ──────────
+    all_faces = sorted(
+        glob.glob("output/*/face_cartoon.png") +
+        glob.glob("output/*/face_ready.png"),
+        key=os.path.getmtime,
+        reverse=True
+    )
+
+    face_path = None
+    if all_faces:
+        print("\n  ── Face image for preview ──────────────────")
+        for i, path in enumerate(all_faces):
+            folder = os.path.basename(os.path.dirname(path))
+            print(f"  [{i+1}] {folder}")
+        print("  → Type a NUMBER, a FILE PATH, or press ENTER for most recent")
+        choice = input("  Choice: ").strip().strip('"').strip("'")
+
+        if not choice:
+            face_path = all_faces[0]
+        elif choice.isdigit() and 0 <= int(choice) - 1 < len(all_faces):
+            face_path = all_faces[int(choice) - 1]
+        elif os.path.exists(choice):
+            face_path = choice
+        else:
+            print("  ⚠ Not found — using most recent")
+            face_path = all_faces[0]
+        print(f"  → Using: {face_path}")
+    else:
+        print("  ⚠ No face images found — preview will show outline only")
+
     page_order = [f"page_{chr(i)}" for i in range(65, 91)]
 
     for page_key in page_order:
@@ -525,7 +835,7 @@ def run_neck_anchor_finder():
             if redo != "y":
                 continue
 
-        point = get_point_for_template(template_path, page_key)
+        point = get_point_for_template(template_path, page_key, face_path)
 
         if point:
             if page_key not in zones:
@@ -540,6 +850,89 @@ def run_neck_anchor_finder():
     print("\n  ✔ Neck anchors configured!\n")
 
 
+def run_combined_finder():
+    """
+    Combined pass: for each page, set face SIZE (drag) then
+    neck POSITION (click) in one continuous flow. Saves both
+    face_zone and neck_anchor together per page.
+    """
+    print("\n════════════════════════════════════════")
+    print("  STORYPHY — Combined Zone + Anchor Finder")
+    print("════════════════════════════════════════")
+
+    zones = {}
+    if os.path.exists(OUTPUT_FILE):
+        with open(OUTPUT_FILE, "r") as f:
+            content = f.read().strip()
+            if content:
+                zones = json.loads(content)
+
+    # ── Ask which face image to use for live preview ──────────
+    all_faces = sorted(
+        glob.glob("output/*/face_cartoon.png") +
+        glob.glob("output/*/face_ready.png"),
+        key=os.path.getmtime,
+        reverse=True
+    )
+
+    face_path = None
+    if all_faces:
+        print("\n  ── Face image for preview ──────────────────")
+        for i, path in enumerate(all_faces):
+            folder = os.path.basename(os.path.dirname(path))
+            print(f"  [{i+1}] {folder}")
+        print("  → Type a NUMBER, a FILE PATH, or press ENTER for most recent")
+        choice = input("  Choice: ").strip().strip('"').strip("'")
+
+        if not choice:
+            face_path = all_faces[0]
+        elif choice.isdigit() and 0 <= int(choice) - 1 < len(all_faces):
+            face_path = all_faces[int(choice) - 1]
+        elif os.path.exists(choice):
+            face_path = choice
+        else:
+            print("  ⚠ Not found — using most recent")
+            face_path = all_faces[0]
+        print(f"  → Using: {face_path}")
+    else:
+        print("  ⚠ No face images found — preview will show outline only")
+
+    page_order = (
+        ["cover_front"] +
+        [f"page_{chr(i)}" for i in range(65, 91)] +
+        ["cover_back"]
+    )
+
+    for page_key in page_order:
+        template_path = os.path.join(TEMPLATES_DIR, f"{page_key}.png")
+        if not os.path.exists(template_path):
+            print(f"  ⚠ Template not found: {template_path} — skipping")
+            continue
+
+        existing = zones.get(page_key)
+        if existing and "face_zone" in existing and "neck_anchor" in existing:
+            redo = input(f"  {page_key} already fully set. Redo? (y/n): ").strip().lower()
+            if redo != "y":
+                continue
+
+        result = get_zone_and_anchor_for_template(
+            template_path, page_key, existing_zone=existing, face_path=face_path
+        )
+
+        if result:
+            if page_key not in zones:
+                zones[page_key] = {}
+            zones[page_key]["face_zone"] = result["face_zone"]
+            zones[page_key]["neck_anchor"] = result["neck_anchor"]
+
+            os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+            with open(OUTPUT_FILE, "w") as f:
+                json.dump(zones, f, indent=2)
+            print(f"  ✔ Saved ({len(zones)} pages total)")
+
+    print("\n  ✔ Combined zones + anchors configured!\n")
+
+
 if __name__ == "__main__":
 
     print("\n========================================")
@@ -548,9 +941,10 @@ if __name__ == "__main__":
     print("  [1] Face placement zones")
     print("  [2] Cloud/text zones")
     print("  [3] Neck anchor points")
+    print("  [4] Combined: size + anchor together")
     print("========================================")
 
-    mode = input("  Choice (1/2/3): ").strip()
+    mode = input("  Choice (1/2/3/4): ").strip()
 
     if mode == "1":
         run_zone_finder()
@@ -558,5 +952,7 @@ if __name__ == "__main__":
         run_cloud_zone_finder()
     elif mode == "3":
         run_neck_anchor_finder()
+    elif mode == "4":
+        run_combined_finder()
     else:
-        print("  Invalid choice — enter 1, 2, or 3")
+        print("  Invalid choice — enter 1, 2, 3, or 4")

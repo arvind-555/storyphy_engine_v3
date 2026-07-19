@@ -5,8 +5,29 @@
 # This script takes the cartoon face + zones.json and:
 #   1. Loops through all 28 pages
 #   2. Opens each template
-#   3. Pastes the cartoon face at the correct zone
+#   3. Pastes the FULL cartoon face at the correct position —
+#      position is driven by neck_anchor (a point set in
+#      zone_finder.py), size is driven by face_zone (a box)
 #   4. Saves each composed page to output/pages/
+#
+# ── How positioning works ──────────────────────────────────
+# No face detection runs here — deliberately. Detection-based
+# guessing (eye distance, chin ratios, landmark models) always
+# has some failure rate, which doesn't scale to thousands of
+# different kids' faces.
+#
+# Instead: the pipeline now sends the STANDARDIZED face_ready.png
+# (fixed 800x800, face always in the same relative position —
+# see face_prep.py) into cartoonify.py, instead of the raw photo.
+# cartoonify.py's prompt also instructs the AI to "end naturally
+# at the base of the neck" with "comfortable transparent padding."
+# Combined, this means every cartoon output consistently ends
+# near the same point (the neck) at its bottom edge.
+#
+# So: trim transparent padding → the bottom edge of what's left
+# reliably represents "neck/chin" → align that bottom edge to
+# each page's neck_anchor point. Same deterministic math for
+# every image, every time. No per-image AI judgment involved.
 # ============================================================
 
 print("▶ Running compositor.py — Composing All Pages")
@@ -17,81 +38,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # ── Configuration ───────────────────────────────────────────
-TEMPLATES_DIR      = "templates"
-ZONES_FILE         = "config/zones.json"
+TEMPLATES_DIR = "templates"
+ZONES_FILE    = "config/zones.json"
 
-# Fixed size for the cartoon face before placing in zones.
-# Every input photo — regardless of resolution — produces a
-# face standardized to this square canvas first.
-# Adjust this value if faces consistently look too big or small.
-STANDARD_FACE_SIZE = 400  # pixels
-
-# ── Helper: Re-crop cartoon face to consistent framing ───────
-def recrop_cartoon_face(cartoon_img):
-    """
-    The AI returns cartoon faces with inconsistent framing —
-    sometimes tight head, sometimes head + long neck.
-
-    This re-detects the actual head in the cartoon and re-crops
-    it to a CONSISTENT framing every time, so the face fits the
-    same way on every template regardless of AI output variation.
-
-    Returns a re-cropped RGBA image.
-    """
-    import cv2
-    import mediapipe as mp
-    from mediapipe.tasks.python import vision as mp_vision
-    from mediapipe.tasks.python.core.base_options import BaseOptions
-
-    # Convert PIL RGBA to RGB numpy array for detection
-    rgb = cartoon_img.convert("RGB")
-    rgb_array = np.array(rgb)
-
-    model_path = "config/blaze_face_short_range.tflite"
-    if not os.path.exists(model_path):
-        print("  ⚠ Face model not found — skipping re-crop")
-        return cartoon_img
-
-    base_options = BaseOptions(model_asset_path=model_path)
-    options      = mp_vision.FaceDetectorOptions(
-        base_options=base_options,
-        min_detection_confidence=0.4
-    )
-
-    with mp_vision.FaceDetector.create_from_options(options) as detector:
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_array)
-        results  = detector.detect(mp_image)
-
-        if not results.detections:
-            print("  ⚠ No face found in cartoon — using as-is")
-            return cartoon_img
-
-        keypoints = results.detections[0].keypoints
-        right_eye, left_eye = keypoints[0], keypoints[1]
-
-    img_w, img_h = cartoon_img.size
-    rx, ry = right_eye.x * img_w, right_eye.y * img_h
-    lx, ly = left_eye.x * img_w, left_eye.y * img_h
-    eye_dist = ((lx - rx) ** 2 + (ly - ry) ** 2) ** 0.5
-    eye_cx, eye_cy = (lx + rx) / 2, (ly + ry) / 2
-
-    # Crop relative to eye distance — stable regardless of hair/expression,
-    # unlike the bounding box which shifts with hairstyle/framing
-    half_w        = eye_dist * 2.2
-    top_margin    = eye_dist * 2.0
-    bottom_margin = eye_dist * 3.0
-
-    x1 = max(0, int(eye_cx - half_w))
-    y1 = max(0, int(eye_cy - top_margin))
-    x2 = min(img_w, int(eye_cx + half_w))
-    y2 = min(img_h, int(eye_cy + bottom_margin))
-
-    cropped = cartoon_img.crop((x1, y1, x2, y2))
-    if cropped.size[0] == 0 or cropped.size[1] == 0:
-        print("  ⚠ Re-crop gave zero size — using original")
-        return cartoon_img
-    print(f"  ✔ Cartoon re-cropped to consistent framing: {cropped.size}")
-    return cropped
 
 # ── Main Function ─────────────────────────────────────────────
 def compose_all_pages(cartoon_face_path, child_name, output_dir):
@@ -131,40 +80,14 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
     cartoon_face = Image.open(cartoon_face_path).convert("RGBA")
     print(f"  ✔ Cartoon face loaded: {cartoon_face.size}")
 
-    # Re-crop to consistent framing — the AI returns inconsistent
-    # head/neck framing per photo (tight head vs head+long neck).
-    # Without this, TARGET_H scaling below standardizes the outer
-    # box but not where the actual face sits within it, causing
-    # per-image size/position drift.
-    cartoon_face = recrop_cartoon_face(cartoon_face)
-
-    # Trim transparent padding
+    # Trim to visible content only. With standardized face_ready.png
+    # input, the AI consistently ends the image near the neck/chin,
+    # so the bottom edge of this trim reliably represents that point.
+    # No detection needed — same math for every image, every time.
     bbox = cartoon_face.getbbox()
     if bbox:
         cartoon_face = cartoon_face.crop(bbox)
         print(f"  ✔ Trimmed to content: {cartoon_face.size}")
-
-    # Standardize height
-    TARGET_H = 600
-    face_w, face_h = cartoon_face.size
-    scale = TARGET_H / face_h
-    new_w = int(face_w * scale)
-    face_scaled = cartoon_face.resize((new_w, TARGET_H), Image.LANCZOS)
-
-    # Place on fixed square canvas — CENTERED
-    # This corrects any left/right offset the AI introduced
-    canvas_size = 600
-    canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
-    offset_x = (canvas_size - new_w) // 2
-    offset_y = (canvas_size - TARGET_H) // 2
-    canvas.paste(face_scaled, (offset_x, offset_y), face_scaled)
-    cartoon_face = canvas
-    print(f"  ✔ Centered on {canvas_size}x{canvas_size} canvas")
-
-    # NOTE: do NOT re-trim to bbox here — that would undo the
-    # centering we just did and make face size/position vary
-    # per photo (inconsistent hair/tilt/ears in the trimmed box).
-    # Keep the full padded, centered canvas going into the page loop.
 
     # ── Create output directory ───────────────────────────────
     os.makedirs(output_dir, exist_ok=True)
@@ -209,9 +132,7 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
             fz_w = face_zone["w"]
             fz_h = face_zone["h"]
 
-            # Scale standardized face to fit zone maintaining
-            # aspect ratio — same math every time since the
-            # input face is now always STANDARD_FACE_SIZE square
+            # SIZE comes from face_zone — scale to fit
             face_w, face_h = cartoon_face.size
             scale  = min(fz_w / face_w, fz_h / face_h)
             new_w  = max(1, int(face_w * scale))
@@ -220,12 +141,18 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
             face_resized = cartoon_face.resize((new_w, new_h), Image.LANCZOS)
             face_rgba    = face_resized.convert("RGBA")
 
-            # Align face to top of zone, centered horizontally
-            # (top-align prevents bottom of face being cut off)
-            # Bottom-align so chin consistently meets the body
-            # illustration below it, instead of floating centered
-            center_x = fz_x + (fz_w - new_w) // 2
-            center_y = fz_y + fz_h - new_h
+            # POSITION comes from neck_anchor — the bottom edge of
+            # the trimmed face image (= neck/chin) lands exactly on
+            # the anchor point set in zone_finder. No detection.
+            neck = zone.get("neck_anchor")
+            if neck:
+                center_x = neck["x"] - new_w // 2
+                center_y = neck["y"] - new_h   # bottom edge = neck point
+                center_y = max(0, center_y)    # never push above top edge
+            else:
+                # Fallback for any page where neck_anchor isn't set yet
+                center_x = fz_x + (fz_w - new_w) // 2
+                center_y = fz_y + (fz_h - new_h) // 2
 
             # Paste using the face's own transparency as the mask
             template.paste(face_rgba, (center_x, center_y), face_rgba)
