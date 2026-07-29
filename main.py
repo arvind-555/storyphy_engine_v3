@@ -9,9 +9,11 @@
 #   4. Add text    — overlay rhyme text on each page
 #   5. PDF         — assemble final book
 #
-# IMPORTANT — Step 2 sends the RAW photo to the API (not the
-# processed face_ready.png). This matches what gave good
-# results in ChatGPT. The AI handles cropping/background itself.
+# NOTE — Step 2 now sends the STANDARDIZED face_ready.png
+# (fixed 800x800, face always in the same relative position)
+# instead of the raw photo. This gives consistent framing in
+# the AI's output, which compositor.py relies on for
+# deterministic, detection-free face placement.
 # ============================================================
 
 import os
@@ -57,15 +59,18 @@ def print_summary(child_name, output_dir, pdf_path, duration_seconds):
 
 
 # ── Step 2 helper: run the chosen cartoonify mode ────────────
-def run_cartoonify(photo_path, face_cartoon_path):
+def run_cartoonify(face_ready_path, face_cartoon_path):
     """
     Asks the user which cartoonify mode to use, then runs it.
 
-    Option 1 — call the OpenAI API with the RAW photo (uses credits)
+    Option 1 — call the OpenAI API with the STANDARDIZED
+               face_ready.png (uses credits)
     Option 2 — reuse an existing face_cartoon.png (free)
 
-    NOTE: option 1 sends the RAW photo (not face_ready.png) —
-    this matches what gave good results in ChatGPT.
+    NOTE: option 1 sends face_ready.png (NOT the raw photo) —
+    this gives consistent framing across every child's photo,
+    which the compositor relies on for reliable face placement
+    without needing per-image detection.
 
     Returns the path to the cartoon face, or None on failure.
     """
@@ -76,11 +81,11 @@ def run_cartoonify(photo_path, face_cartoon_path):
 
     choice = input("  Choice (1 or 2): ").strip()
 
-    # ── Option 1 — call the API with the RAW photo ───────────
+    # ── Option 1 — call the API with the standardized face ───
     if choice == "1":
         print("  -> Mode: API (OpenAI gpt-image-1)")
-        print(f"  -> Sending RAW photo to API: {photo_path}")
-        return cartoonify_face(photo_path, face_cartoon_path)
+        print(f"  -> Sending standardized face to API: {face_ready_path}")
+        return cartoonify_face(face_ready_path, face_cartoon_path)
 
     # ── Option 2 — reuse an existing cartoon face ────────────
     elif choice == "2":
@@ -157,8 +162,8 @@ def run_pipeline(child_name, photo_path):
     # ══════════════════════════════════════════════════════════
     # STEP 1 — Face Preparation (crop + remove background)
     # ══════════════════════════════════════════════════════════
-    # NOTE: face_ready.png is still generated here as a backup /
-    # for inspection, but the API in Step 2 uses the RAW photo.
+    # face_ready.png is now the STANDARDIZED input for Step 2 —
+    # fixed 800x800, face always in the same relative position.
     print_banner(1, 5, "Face Detection & Background Removal")
 
     face_result = prepare_face(photo_path, face_ready_path)
@@ -172,8 +177,10 @@ def run_pipeline(child_name, photo_path):
     # ══════════════════════════════════════════════════════════
     print_banner(2, 5, "Cartoonify Face (OpenAI Pixar Style)")
 
-    # IMPORTANT: pass the RAW photo_path, NOT face_ready_path
-    cartoon_result = run_cartoonify(photo_path, face_cartoon_path)
+    # Pass the STANDARDIZED face_ready_path, NOT the raw photo —
+    # gives consistent framing in the AI's output, which the
+    # compositor relies on for detection-free face placement
+    cartoon_result = run_cartoonify(face_ready_path, face_cartoon_path)
 
     if not cartoon_result:
         print("\nPIPELINE FAILED at Step 2 — Cartoonify")

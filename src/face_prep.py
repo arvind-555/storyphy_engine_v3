@@ -23,7 +23,7 @@ import math
 
 # ── Configuration ────────────────────────────────────────────
 PADDING_TOP    = 0.8   # space above face (forehead + hair)
-PADDING_BOTTOM = 0.1   # space below face (chin only, no neck)
+PADDING_BOTTOM = 0.8   # space below face (chin + neck/shoulders)
 PADDING_SIDES  = 0.3   # space left and right
 
 TARGET_LONG_SIDE = 1500  # normalize input image to this size
@@ -200,10 +200,16 @@ def prepare_face(input_image_path, output_path):
 
     face_scaled = face_no_bg.resize((scaled_w, scaled_h), Image.LANCZOS)
 
-    # Place on fixed transparent square canvas — centered
-    canvas   = Image.new("RGBA", (STANDARD_SIZE, STANDARD_SIZE), (0, 0, 0, 0))
-    offset_x = (STANDARD_SIZE - scaled_w) // 2
-    offset_y = (STANDARD_SIZE - scaled_h) // 2
+    # Place on fixed transparent square canvas
+    # Horizontal: centered. Vertical: bottom-anchored (not centered).
+    # Bottom-anchoring guarantees the neck always lands at the same
+    # Y position regardless of the child's face/photo aspect ratio —
+    # this is what makes cartoonify's "neck flush at canvas bottom"
+    # prompt work deterministically downstream.
+    canvas        = Image.new("RGBA", (STANDARD_SIZE, STANDARD_SIZE), (0, 0, 0, 0))
+    offset_x      = (STANDARD_SIZE - scaled_w) // 2
+    bottom_margin = int(STANDARD_SIZE * 0.05)  # small breathing room below neck
+    offset_y      = STANDARD_SIZE - scaled_h - bottom_margin
     canvas.paste(face_scaled, (offset_x, offset_y), face_scaled)
 
     print(f"  ✔ Standardized: {current_w}x{current_h} → {STANDARD_SIZE}x{STANDARD_SIZE}px")
