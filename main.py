@@ -34,7 +34,7 @@ load_dotenv()
 
 # ── Import pipeline modules ──────────────────────────────────
 from face_prep   import prepare_face
-from cartoonify  import cartoonify_face
+from cartoonify  import cartoonify_face, anchor_to_neck_bottom
 from compositor  import compose_all_pages
 from pdf_builder import build_pdf
 
@@ -121,8 +121,16 @@ def run_cartoonify(face_ready_path, face_cartoon_path):
         else:
             selected = face_choice if os.path.exists(face_choice) else existing[0]
 
-        shutil.copy(selected, face_cartoon_path)
+        # Run the same neck-anchor step used in option 1, so reused
+        # faces end up just as consistently framed as fresh API calls —
+        # a plain copy would skip normalization entirely.
         print(f"  -> Reusing: {selected}")
+        print("  -> Anchoring neck position (same as fresh API calls)...")
+        from PIL import Image
+        reused_image  = Image.open(selected).convert("RGBA")
+        anchored_image = anchor_to_neck_bottom(reused_image)
+        os.makedirs(os.path.dirname(face_cartoon_path), exist_ok=True)
+        anchored_image.save(face_cartoon_path, format="PNG")
         return face_cartoon_path
 
     # ── Invalid choice ───────────────────────────────────────

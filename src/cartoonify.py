@@ -19,6 +19,75 @@ from openai import OpenAI
 from PIL import Image
 from io import BytesIO
 
+# ── Neck-anchor normalization config ─────────────────────────
+ANCHOR_CANVAS_SIZE = 800    # must match face_prep.py's STANDARD_SIZE
+ANCHOR_BOTTOM_MARGIN = 0    # flush at canvas bottom, no margin
+ANCHOR_ALPHA_THRESHOLD = 25 # ignore faint feathered alpha when measuring
+
+
+def anchor_to_neck_bottom(cartoon_image, canvas_size=ANCHOR_CANVAS_SIZE,
+                           alpha_threshold=ANCHOR_ALPHA_THRESHOLD):
+    """
+    Finds the neck-ending point in a cartoonified image (bottom-center
+    of the visible subject, ignoring faint feathered edges) and
+    repositions the whole image so that point lands on the same fixed
+    target every time — regardless of how gpt-image-1 happened to
+    frame this particular child.
+
+    Takes a PIL RGBA image, returns a new PIL RGBA image on a fixed
+    transparent canvas.
+    """
+    alpha = cartoon_image.split()[-1]
+    mask  = alpha.point(lambda a: 255 if a > alpha_threshold else 0)
+    bbox  = mask.getbbox()
+
+    if not bbox:
+        print("  ⚠ Could not find subject bounds — skipping neck anchor")
+        return cartoon_image
+
+    x1, y1, x2, y2 = bbox
+    subject_h = y2 - y1
+
+    target_x = canvas_size // 2
+    target_y = canvas_size - int(canvas_size * ANCHOR_BOTTOM_MARGIN)
+
+    # If the subject (top of hair to bottom of neck) is taller than
+    # the space available above the target line, bottom-anchoring
+    # alone would push the top off-canvas and silently clip the hair
+    # (canvas.paste() clips anything outside its bounds). Scale the
+    # whole image down first so it fits, THEN anchor.
+    available_height = target_y
+    if subject_h > available_height:
+        scale = available_height / subject_h
+        new_w = int(cartoon_image.width * scale)
+        new_h = int(cartoon_image.height * scale)
+        print(f"  → Subject too tall ({subject_h}px) for canvas — "
+              f"scaling image down by {scale:.2f}x to fit")
+        cartoon_image = cartoon_image.resize((new_w, new_h), Image.LANCZOS)
+
+        # Re-measure bbox on the resized image
+        alpha = cartoon_image.split()[-1]
+        mask  = alpha.point(lambda a: 255 if a > alpha_threshold else 0)
+        bbox  = mask.getbbox()
+        if not bbox:
+            print("  ⚠ Could not find subject bounds after resize — skipping neck anchor")
+            return cartoon_image
+        x1, y1, x2, y2 = bbox
+
+    neck_center_x = (x1 + x2) // 2
+    neck_bottom_y = y2
+
+    offset_x = target_x - neck_center_x
+    offset_y = target_y - neck_bottom_y
+
+    canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+    canvas.paste(cartoon_image, (offset_x, offset_y), cartoon_image)
+
+    print(f"  ✔ Neck anchored: bottom moved from y={neck_bottom_y} "
+          f"→ y={target_y}, center from x={neck_center_x} → x={target_x}")
+
+    return canvas
+
 # ── Daily spend tracker ──────────────────────────────────────
 SPEND_LOG_FILE = "config/spend_log.json"
 DAILY_LIMIT    = 2.00   # max $ per day (safety limit)
@@ -248,6 +317,14 @@ def cartoonify_face(input_path, output_path):
     except Exception as e:
         print(f"  ✖ ERROR: Failed to decode result: {e}")
         return None
+
+    # ── Step 5b: Anchor neck-bottom to a fixed canvas position ──
+    # gpt-image-1 doesn't guarantee identical framing across kids,
+    # so we measure where THIS image's neck actually ends and
+    # reposition it onto a fixed target — deterministic per-image,
+    # no reliance on prompt obedience.
+    print("  → Anchoring neck position...")
+    cartoon_image = anchor_to_neck_bottom(cartoon_image)
 
     # ── Step 6: Save final result ─────────────────────────────
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

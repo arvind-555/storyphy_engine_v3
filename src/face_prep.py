@@ -1,14 +1,19 @@
 # ============================================================
 # face_prep.py
-# STORYPHY — Step 1: Face Detection, Crop & Background Removal
+# STORYPHY — Step 1: Prep whole photo for cartoonify
 # ============================================================
 # This script takes the child's photo as input and:
 #   1. Normalizes input image size
-#   2. Detects the face using MediaPipe
+#   2. Detects the face using MediaPipe (for tilt only)
 #   3. Straightens tilted faces
-#   4. Crops the face with padding
-#   5. Removes the background using rembg
-#   6. Saves to a FIXED 800x800 square (consistent every time)
+#   4. Removes the background using rembg (whole photo, no crop)
+#   5. Fits the whole subject onto a FIXED 800x800 transparent
+#      canvas, bottom-anchored + horizontally centered
+#
+# NOTE: This version does NOT crop to the face. The whole photo
+# is kept so nothing gets clipped (hair/neck). Face-size
+# consistency across different kids' photos is enforced by the
+# cartoonify prompt instead of by this script.
 # ============================================================
 
 print("▶ Running face_prep.py — Face Detection & Background Removal")
@@ -22,12 +27,15 @@ import os
 import math
 
 # ── Configuration ────────────────────────────────────────────
-PADDING_TOP    = 0.8   # space above face (forehead + hair)
-PADDING_BOTTOM = 0.8   # space below face (chin + neck/shoulders)
-PADDING_SIDES  = 0.3   # space left and right
+# NOTE: No crop/padding step anymore. Whole photo is kept as-is
+# (background removed, not cropped) to avoid clipping hair/neck.
+# Face-size consistency is now enforced by the cartoonify prompt
+# instead of by this script. See README/notes if this changes.
 
 TARGET_LONG_SIDE = 1500  # normalize input image to this size
 STANDARD_SIZE    = 800   # every face_ready.png is this square
+BOTTOM_MARGIN    = 0     # flush at canvas bottom, no margin (must match cartoonify.py's ANCHOR_BOTTOM_MARGIN)
+TARGET_SUBJECT_HEIGHT_PCT = 0.68  # subject bbox height as % of canvas — makes every output the same scale
 
 
 # ── Helper: Straighten tilted face ───────────────────────────
@@ -70,8 +78,9 @@ def straighten_face(image_bgr, detection):
 # ── Main Function ─────────────────────────────────────────────
 def prepare_face(input_image_path, output_path):
     """
-    Takes a child photo, detects face, crops, removes background,
-    and saves a standardized 800x800 transparent PNG.
+    Takes a child photo, straightens tilt, removes background
+    (whole photo, no crop), and saves a standardized 800x800
+    transparent PNG with the subject bottom-anchored + centered.
     """
 
     print(f"  → Loading image from: {input_image_path}")
@@ -101,8 +110,11 @@ def prepare_face(input_image_path, output_path):
     img_h, img_w = image_bgr.shape[:2]
     image_rgb    = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-    # ── Step 3: Detect face using MediaPipe ───────────────────
-    print("  → Detecting face with MediaPipe...")
+    # ── Step 3: Detect face using MediaPipe (for straightening only) ──
+    # NOTE: detection is used only to find eye positions for tilt
+    # correction. It is NOT used for cropping/padding anymore —
+    # the whole photo is kept, to avoid clipping hair/neck.
+    print("  → Detecting face with MediaPipe (for tilt correction)...")
 
     from mediapipe.tasks import python as mp_python
     from mediapipe.tasks.python import vision as mp_vision
@@ -135,84 +147,70 @@ def prepare_face(input_image_path, output_path):
         results = detector.detect(mp_image)
 
         if not results.detections:
-            print("  ✖ ERROR: No face detected.")
-            return None
-
-        detection = results.detections[0]
-        print(f"  ✔ Face detected! Confidence: {detection.categories[0].score:.2f}")
-
-        # ── Step 4: Straighten tilted face ────────────────────
-        print("  → Checking face tilt...")
-        image_bgr = straighten_face(image_bgr, detection)
-
-        # Re-detect on straightened image
-        mp_image_straight = mp.Image(
-            image_format=mp.ImageFormat.SRGB,
-            data=cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-        )
-        results_straight = detector.detect(mp_image_straight)
-
-        if results_straight.detections:
-            detection = results_straight.detections[0]
-            print("  ✔ Face re-detected on straightened image")
+            print("  ⚠ No face detected — skipping tilt correction, using photo as-is")
         else:
-            print("  ⚠ Re-detection failed — using original detection")
+            detection = results.detections[0]
+            print(f"  ✔ Face detected! Confidence: {detection.categories[0].score:.2f}")
 
-        # Get bounding box
-        bbox = detection.bounding_box
-        x    = bbox.origin_x
-        y    = bbox.origin_y
-        w    = bbox.width
-        h    = bbox.height
+            # ── Step 4: Straighten tilted face ────────────────
+            print("  → Checking face tilt...")
+            image_bgr = straighten_face(image_bgr, detection)
 
-    # ── Step 5: Crop face with padding ───────────────────────
-    print(f"  → Cropping with padding...")
+    img_h, img_w = image_bgr.shape[:2]
 
-    pad_top    = int(h * PADDING_TOP)
-    pad_bottom = int(h * PADDING_BOTTOM)
-    pad_left   = int(w * PADDING_SIDES)
-    pad_right  = int(w * PADDING_SIDES)
-
-    x1 = max(0, x - pad_left)
-    y1 = max(0, y - pad_top)
-    x2 = min(img_w, x + w + pad_right)
-    y2 = min(img_h, y + h + pad_bottom)
-
-    face_crop_bgr = image_bgr[y1:y2, x1:x2]
-    print(f"  → Cropped face size: {x2-x1}x{y2-y1} pixels")
-
-    # ── Step 6: Remove background ─────────────────────────────
-    print("  → Removing background...")
-    face_crop_pil = Image.fromarray(cv2.cvtColor(face_crop_bgr, cv2.COLOR_BGR2RGB))
-    face_no_bg    = remove(face_crop_pil)
+    # ── Step 5: Remove background (whole image, no crop) ─────
+    print("  → Removing background from full photo...")
+    full_image_pil = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
+    subject_no_bg   = remove(full_image_pil)
     print("  ✔ Background removed")
 
-    # ── Step 7: Standardize to fixed 800x800 square ──────────
-    # This is the KEY step — every face_ready.png is EXACTLY
-    # 800x800 regardless of input photo size or distance.
-    # This guarantees the AI and compositor get consistent input.
-    print(f"  → Standardizing to {STANDARD_SIZE}x{STANDARD_SIZE}px...")
+    # ── Step 6: Scale subject to a fixed % of canvas, then place ──
+    # Since background is transparent, we measure the actual subject
+    # bounding box (not just fit-to-canvas) and scale so its height
+    # always equals a fixed target % of the canvas. This makes every
+    # child's face_ready.png the same face scale, regardless of how
+    # close/far they were in the original photo — assumes headshot-
+    # framed input photos (internal use).
+    print(f"  → Scaling subject to {int(TARGET_SUBJECT_HEIGHT_PCT*100)}% of canvas height...")
 
-    current_w, current_h = face_no_bg.size
-    scale    = min(STANDARD_SIZE / current_w, STANDARD_SIZE / current_h)
+    alpha = subject_no_bg.split()[-1]
+    mask  = alpha.point(lambda a: 255 if a > 25 else 0)
+    bbox  = mask.getbbox()
+
+    if not bbox:
+        print("  ✖ ERROR: No subject found after background removal.")
+        return None
+
+    x1, y1, x2, y2 = bbox
+    subject_h = y2 - y1
+
+    target_h = int(STANDARD_SIZE * TARGET_SUBJECT_HEIGHT_PCT)
+    scale    = target_h / subject_h
+
+    current_w, current_h = subject_no_bg.size
     scaled_w = int(current_w * scale)
     scaled_h = int(current_h * scale)
 
-    face_scaled = face_no_bg.resize((scaled_w, scaled_h), Image.LANCZOS)
+    subject_scaled = subject_no_bg.resize((scaled_w, scaled_h), Image.LANCZOS)
 
-    # Place on fixed transparent square canvas
-    # Horizontal: centered. Vertical: bottom-anchored (not centered).
-    # Bottom-anchoring guarantees the neck always lands at the same
-    # Y position regardless of the child's face/photo aspect ratio —
-    # this is what makes cartoonify's "neck flush at canvas bottom"
-    # prompt work deterministically downstream.
+    # Re-measure bbox on the scaled image to anchor precisely
+    alpha_scaled = subject_scaled.split()[-1]
+    mask_scaled  = alpha_scaled.point(lambda a: 255 if a > 25 else 0)
+    bbox_scaled  = mask_scaled.getbbox()
+    sx1, sy1, sx2, sy2 = bbox_scaled
+    subject_center_x   = (sx1 + sx2) // 2
+    subject_bottom_y   = sy2
+
     canvas        = Image.new("RGBA", (STANDARD_SIZE, STANDARD_SIZE), (0, 0, 0, 0))
-    offset_x      = (STANDARD_SIZE - scaled_w) // 2
-    bottom_margin = int(STANDARD_SIZE * 0.05)  # small breathing room below neck
-    offset_y      = STANDARD_SIZE - scaled_h - bottom_margin
-    canvas.paste(face_scaled, (offset_x, offset_y), face_scaled)
+    bottom_margin = int(STANDARD_SIZE * BOTTOM_MARGIN)
+    target_x      = STANDARD_SIZE // 2
+    target_y      = STANDARD_SIZE - bottom_margin
+    offset_x      = target_x - subject_center_x
+    offset_y      = target_y - subject_bottom_y
+    canvas.paste(subject_scaled, (offset_x, offset_y), subject_scaled)
 
-    print(f"  ✔ Standardized: {current_w}x{current_h} → {STANDARD_SIZE}x{STANDARD_SIZE}px")
+    print(f"  ✔ Scaled subject height {subject_h}px → {target_h}px "
+          f"({scale:.2f}x), bottom-anchored at y={target_y}")
 
     # ── Step 8: Save ──────────────────────────────────────────
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
