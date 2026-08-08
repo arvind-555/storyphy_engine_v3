@@ -15,31 +15,105 @@ print("▶ Running cartoonify.py — OpenAI gpt-image-1 Cartoonification")
 
 import os
 import base64
+import numpy as np
+from scipy import ndimage
 from openai import OpenAI
 from PIL import Image
 from io import BytesIO
+from rembg import remove
 
 # ── Neck-anchor normalization config ─────────────────────────
 ANCHOR_CANVAS_SIZE = 800    # must match face_prep.py's STANDARD_SIZE
 ANCHOR_BOTTOM_MARGIN = 0    # flush at canvas bottom, no margin
 ANCHOR_ALPHA_THRESHOLD = 25 # ignore faint feathered alpha when measuring
+TARGET_SUBJECT_HEIGHT_PCT = 0.68  # must match face_prep.py's TARGET_SUBJECT_HEIGHT_PCT
+ANCHOR_MIN_ROW_PIXELS = 5    # legacy, unused (see clean_subject)
+ANCHOR_FEATHER_PAD = 4       # dilate the kept region by this many px so soft
+                             # hair feathering isn't cut into a hard edge
+
+
+def clean_subject(pil_rgba, alpha_threshold=ANCHOR_ALPHA_THRESHOLD,
+                  feather_pad=ANCHOR_FEATHER_PAD):
+    """
+    Isolates the child (the largest connected region of non-transparent
+    pixels) and ERASES everything else by zeroing its alpha. Returns
+    (cleaned_image, bbox_of_subject).
+
+    Two things make this necessary:
+
+    1. AI-generated / re-saved PNGs often carry artifacts — stray specks,
+       or dense full-height vertical lines along an edge. Measuring with
+       a plain getbbox() includes them, dragging the bbox to the canvas
+       edge and wrecking both scale and horizontal centering.
+
+    2. It isn't enough to merely measure around artifacts, because the
+       artifacts stay in the saved file. Anything downstream that trims
+       or centers with a plain getbbox() (compositor.py, zone_finder.py)
+       would then re-inherit the same error. So we delete them here,
+       once, and every later step sees a clean subject.
+
+    The kept region is dilated slightly so the soft feathered alpha
+    around hair survives instead of being clipped to a hard edge.
+    """
+    rgba = np.array(pil_rgba.convert("RGBA"))
+    alpha = rgba[:, :, 3]
+    mask = alpha > alpha_threshold
+
+    labeled, n = ndimage.label(mask)
+    if n == 0:
+        return pil_rgba, None
+
+    sizes = ndimage.sum(mask, labeled, range(1, n + 1))
+    largest_label = int(np.argmax(sizes)) + 1
+    keep = labeled == largest_label
+
+    keep_dilated = ndimage.binary_dilation(keep, iterations=feather_pad)
+    rgba[:, :, 3] = np.where(keep_dilated, alpha, 0)
+
+    ys, xs = np.where(keep)
+    bbox = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
+    return Image.fromarray(rgba), bbox
+
+
+def get_robust_bbox(pil_rgba, alpha_threshold=ANCHOR_ALPHA_THRESHOLD,
+                    min_pixels=ANCHOR_MIN_ROW_PIXELS):
+    """Bbox of the largest connected region only (no image modification)."""
+    _, bbox = clean_subject(pil_rgba, alpha_threshold)
+    return bbox
 
 
 def anchor_to_neck_bottom(cartoon_image, canvas_size=ANCHOR_CANVAS_SIZE,
                            alpha_threshold=ANCHOR_ALPHA_THRESHOLD):
     """
-    Finds the neck-ending point in a cartoonified image (bottom-center
-    of the visible subject, ignoring faint feathered edges) and
-    repositions the whole image so that point lands on the same fixed
-    target every time — regardless of how gpt-image-1 happened to
-    frame this particular child.
+    Finds the subject's bounding box (ignoring faint feathered edges),
+    scales the WHOLE image so the subject height always equals a fixed
+    target % of the canvas (same standard as face_prep.py), then
+    bottom-anchors + horizontally centers it. This guarantees every
+    face_cartoon.png — whether fresh from the API or reused from an
+    old run — ends up the same size AND position, regardless of how
+    gpt-image-1 happened to frame this particular child.
 
     Takes a PIL RGBA image, returns a new PIL RGBA image on a fixed
     transparent canvas.
     """
-    alpha = cartoon_image.split()[-1]
-    mask  = alpha.point(lambda a: 255 if a > alpha_threshold else 0)
-    bbox  = mask.getbbox()
+    # Strip artifacts (stray specks, edge lines) from the image itself,
+    # not just from our measurement — otherwise they remain in the saved
+    # PNG and every downstream step that trims with a plain getbbox()
+    # re-inherits the same off-centre error.
+    cartoon_image, bbox = clean_subject(cartoon_image, alpha_threshold)
+
+    # Safety check: if the bbox covers (almost) the ENTIRE canvas, the
+    # image likely has no real transparency (e.g. a file downloaded
+    # from ChatGPT's web UI, flattened onto solid white with alpha
+    # fully opaque everywhere) rather than a true transparent PNG from
+    # our own API call. Run rembg on it first so measurement is
+    # actually meaningful, instead of scaling based on the whole canvas.
+    if bbox and (bbox[2] - bbox[0]) >= cartoon_image.width * 0.95 and \
+       (bbox[3] - bbox[1]) >= cartoon_image.height * 0.95:
+        print("  ⚠ No real transparency detected — running background "
+              "removal first (this file likely wasn't from our own API call)")
+        cartoon_image = remove(cartoon_image)
+        cartoon_image, bbox = clean_subject(cartoon_image, alpha_threshold)
 
     if not bbox:
         print("  ⚠ Could not find subject bounds — skipping neck anchor")
@@ -50,32 +124,26 @@ def anchor_to_neck_bottom(cartoon_image, canvas_size=ANCHOR_CANVAS_SIZE,
 
     target_x = canvas_size // 2
     target_y = canvas_size - int(canvas_size * ANCHOR_BOTTOM_MARGIN)
+    target_h = int(canvas_size * TARGET_SUBJECT_HEIGHT_PCT)
 
-    # If the subject (top of hair to bottom of neck) is taller than
-    # the space available above the target line, bottom-anchoring
-    # alone would push the top off-canvas and silently clip the hair
-    # (canvas.paste() clips anything outside its bounds). Scale the
-    # whole image down first so it fits, THEN anchor.
-    available_height = target_y
-    if subject_h > available_height:
-        scale = available_height / subject_h
-        new_w = int(cartoon_image.width * scale)
-        new_h = int(cartoon_image.height * scale)
-        print(f"  → Subject too tall ({subject_h}px) for canvas — "
-              f"scaling image down by {scale:.2f}x to fit")
-        cartoon_image = cartoon_image.resize((new_w, new_h), Image.LANCZOS)
+    # Scale the whole image so subject height hits the fixed target %
+    # — same standard face_prep.py already applies to face_ready.png,
+    # so option 1 (fresh API) and option 2 (reuse) both end up
+    # identically scaled, not just identically positioned.
+    scale = target_h / subject_h
+    new_w = int(cartoon_image.width * scale)
+    new_h = int(cartoon_image.height * scale)
+    print(f"  → Scaling subject height {subject_h}px → {target_h}px ({scale:.2f}x)")
+    cartoon_image = cartoon_image.resize((new_w, new_h), Image.LANCZOS)
 
-        # Re-measure bbox on the resized image
-        alpha = cartoon_image.split()[-1]
-        mask  = alpha.point(lambda a: 255 if a > alpha_threshold else 0)
-        bbox  = mask.getbbox()
-        if not bbox:
-            print("  ⚠ Could not find subject bounds after resize — skipping neck anchor")
-            return cartoon_image
-        x1, y1, x2, y2 = bbox
-
-    neck_center_x = (x1 + x2) // 2
-    neck_bottom_y = y2
+    # Scale the ORIGINAL bbox coordinates by the same factor instead of
+    # re-measuring on the resized image. Re-measuring is unreliable for
+    # wispy/curly hair — thin, partially-transparent strands can drop
+    # below alpha_threshold after LANCZOS resampling, making the subject
+    # look artificially shorter and throwing off the anchor position.
+    # Geometry (scaling known coordinates) doesn't have this problem.
+    neck_center_x = int(((x1 + x2) // 2) * scale)
+    neck_bottom_y = int(y2 * scale)
 
     offset_x = target_x - neck_center_x
     offset_y = target_y - neck_bottom_y
@@ -87,6 +155,14 @@ def anchor_to_neck_bottom(cartoon_image, canvas_size=ANCHOR_CANVAS_SIZE,
           f"→ y={target_y}, center from x={neck_center_x} → x={target_x}")
 
     return canvas
+
+# ── Reference images ─────────────────────────────────────────
+# A fixed neck-geometry reference passed alongside the child's photo.
+# Giving the model a geometry to match is far more reliable than
+# describing the neck in words — the prompt alone produced random
+# neck widths, which was the root of the placement inconsistency.
+# The prompt MUST label the images by number (see CARTOON_PROMPT).
+NECK_REFERENCE_PATH = "config/neck_reference.png"
 
 # ── Daily spend tracker ──────────────────────────────────────
 SPEND_LOG_FILE = "config/spend_log.json"
@@ -152,82 +228,57 @@ def log_spend(amount):
 # ── Configuration ────────────────────────────────────────────
 
 # Your standard Pixar conversion prompt
-CARTOON_PROMPT = """Transform the uploaded child photo into a premium semi-realistic 3D Storyphy character.
-
-This is an image transformation task, NOT a re-imagination task.
-
-The uploaded photo is the ONLY identity reference.
-
-Preserve the child's exact identity, including:
+CARTOON_PROMPT = """Two input images are provided.
+IMAGE 1 — CHILD IDENTITY
+This image is the ONLY identity reference.
+Preserve exactly:
 • Face shape
+• Facial proportions
+• Hair
+• Hairline
+• Hair texture
 • Eyes
 • Eyebrows
 • Nose
 • Lips
 • Smile
-• Hair
 • Ears
 • Skin tone
 • Age
-
-Do NOT beautify, stylize, or alter the child's facial proportions.
-
-Create a premium semi-realistic 3D storybook illustration with soft cinematic lighting, Pixar-quality rendering, smooth natural skin, and luxury children's book quality.
-
-The child must face directly forward with a centered, upright head and a natural happy smile.
-
-BACKGROUND
-• Transparent background only.
-• No shadows.
-• No outline.
-• No glow.
-
-NECK (CRITICAL)
-
-Generate only the head and neck.
-
-The neck should be straight, centered, and maintain nearly the same width from beneath the jaw to the bottom.
-
-Terminate the neck in a small, smooth oval.
-
-Do NOT generate:
-• Shoulders
-• Shoulder curves
-• Trapezius muscles
-• Collarbones
-• Upper chest
-• Side extensions
-• Neck widening toward the bottom
-
-The output must resemble a clean production-ready head asset, not a portrait or bust.
-
-Do NOT generate:
-• Shoulders
-• Collarbones
-• Upper chest
-• Trapezius muscles
-• Neck-to-shoulder transitions
-• Side extensions beside the neck
-
-The widest part below the jaw should be the neck itself.
-
-The output must end before the shoulders begin.
-
-The neck should fit naturally into a Storyphy character template without requiring additional editing.
-
+• Gender
+Do NOT alter the child's identity.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMAGE 2 — STORYPHY NECK GEOMETRY
+This image is NOT an identity reference.
+Use it ONLY to reproduce the neck geometry.
+Match ONLY:
+• Neck width
+• Neck length
+• Neck silhouette
+• Neck ending
+Ignore every other aspect of Image 2.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT
-
-• Square image
-• Transparent PNG
-• Complete hair
-• Complete ears
-• Complete neck
-• Head centered
-• Comfortable padding around the head
-• Premium production-ready quality
-
-The style should change.
-The child's identity should NOT."""
+Create a premium semi-realistic 3D Storyphy character.
+Generate ONLY:
+• Hair
+• Head
+• Face
+• Ears
+• Standardized neck
+Do NOT generate:
+• Shoulders
+• Collarbones
+• Chest
+• Clothing
+• Trapezius muscles
+The face must come entirely from Image 1.
+The neck geometry must come entirely from Image 2.
+Background must be completely transparent.
+Generate a perfectly centered square image (1:1).
+The head should occupy approximately 70–75% of the canvas while leaving comfortable transparent padding around the hair.
+The child should face directly forward with a centered head and a warm, natural smile.
+The output should be a production-ready transparent PNG suitable for direct placement into Storyphy templates."""
 
 # ── Main Function ─────────────────────────────────────────────
 def cartoonify_face(input_path, output_path):
@@ -283,18 +334,39 @@ def cartoonify_face(input_path, output_path):
     print("  → This takes 15-30 seconds. Please wait...")
 
     try:
-        # Open both images as file objects
-        with open(input_path, "rb") as child_file:
+        # gpt-image-1's edit endpoint accepts a LIST of images. Order
+        # matters and must match how CARTOON_PROMPT refers to them:
+        #   image 1 = the child's photo (identity source)
+        #   image 2 = the neck geometry reference (shape source only)
+        open_files = []
+        try:
+            child_file = open(input_path, "rb")
+            open_files.append(child_file)
+            images_payload = [child_file]
+
+            if os.path.exists(NECK_REFERENCE_PATH):
+                neck_file = open(NECK_REFERENCE_PATH, "rb")
+                open_files.append(neck_file)
+                images_payload.append(neck_file)
+                print(f"  → Neck reference: {NECK_REFERENCE_PATH}")
+            else:
+                print(f"  ⚠ Neck reference not found at {NECK_REFERENCE_PATH}")
+                print("    Sending child photo only — neck geometry will be "
+                      "random, as before.")
 
             response = client.images.edit(
                 model="gpt-image-1",
-                image=child_file,
+                image=images_payload,
                 prompt=CARTOON_PROMPT,
                 size="1024x1024",
                 quality="high",
+                input_fidelity="high",
                 background="transparent",
                 n=1
             )
+        finally:
+            for f in open_files:
+                f.close()
 
         print("  ✔ AI processing complete!")
 
