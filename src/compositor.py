@@ -5,29 +5,37 @@
 # This script takes the cartoon face + zones.json and:
 #   1. Loops through all 28 pages
 #   2. Opens each template
-#   3. Pastes the FULL cartoon face at the correct position —
-#      position is driven by neck_anchor (a point set in
-#      zone_finder.py), size is driven by face_zone (a box)
+#   3. Pastes the cartoon face at the correct position
 #   4. Saves each composed page to output/pages/
 #
 # ── How positioning works ──────────────────────────────────
-# No face detection runs here — deliberately. Detection-based
-# guessing (eye distance, chin ratios, landmark models) always
-# has some failure rate, which doesn't scale to thousands of
-# different kids' faces.
+# No face detection and NO MEASUREMENT runs here — deliberately.
 #
-# Instead: the pipeline now sends the STANDARDIZED face_ready.png
-# (fixed 800x800, face always in the same relative position —
-# see face_prep.py) into cartoonify.py, instead of the raw photo.
-# cartoonify.py's prompt also instructs the AI to "end naturally
-# at the base of the neck" with "comfortable transparent padding."
-# Combined, this means every cartoon output consistently ends
-# near the same point (the neck) at its bottom edge.
+# cartoonify.py guarantees a fixed contract for face_cartoon.png:
+#   • Canvas is exactly FACE_CANVAS_SIZE square
+#   • Subject height is exactly FACE_SUBJECT_PCT of the canvas
+#   • Neck bottom is flush at the canvas bottom edge
+#   • Face centre is at canvas mid-x (eye-midpoint anchored)
 #
-# So: trim transparent padding → the bottom edge of what's left
-# reliably represents "neck/chin" → align that bottom edge to
-# each page's neck_anchor point. Same deterministic math for
-# every image, every time. No per-image AI judgment involved.
+# So this file only has to map two KNOWN canvas points onto each
+# page's neck_anchor. Same arithmetic every time, for every child.
+#
+# ── Why the old trim was removed ───────────────────────────
+# This file used to run getbbox() and crop the face before pasting.
+# That re-measured what cartoonify.py had already standardized, and
+# reintroduced the exact variance the standardization existed to
+# remove:
+#
+#   1. Plain getbbox() uses alpha > 0, not our threshold of 25. Since
+#      cutouts now come from rembg (gpt-image-2 has no transparent
+#      background option), faint feathered pixels around hair shift
+#      the crop unpredictably.
+#   2. Centering on the trimmed WIDTH meant asymmetric hair — a
+#      side-swept fringe — pushed the face off-centre.
+#   3. Scaling on the trimmed size meant a child with voluminous
+#      hair got a visibly SMALLER face than one with flat hair.
+#
+# Trust the contract; don't re-derive it.
 # ============================================================
 
 print("▶ Running compositor.py — Composing All Pages")
@@ -40,6 +48,12 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 # ── Configuration ───────────────────────────────────────────
 TEMPLATES_DIR = "templates"
 ZONES_FILE    = "config/zones.json"
+
+# ── face_cartoon.png contract (set by cartoonify.py) ────────
+# These MUST stay in sync with cartoonify.py. If you change the
+# canvas size or subject height there, change them here too.
+FACE_CANVAS_SIZE = 800    # must match cartoonify.py ANCHOR_CANVAS_SIZE
+FACE_SUBJECT_PCT = 0.68   # must match cartoonify.py TARGET_SUBJECT_HEIGHT_PCT
 
 
 # ── Main Function ─────────────────────────────────────────────
@@ -80,14 +94,16 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
     cartoon_face = Image.open(cartoon_face_path).convert("RGBA")
     print(f"  ✔ Cartoon face loaded: {cartoon_face.size}")
 
-    # Trim to visible content only. With standardized face_ready.png
-    # input, the AI consistently ends the image near the neck/chin,
-    # so the bottom edge of this trim reliably represents that point.
-    # No detection needed — same math for every image, every time.
-    bbox = cartoon_face.getbbox()
-    if bbox:
-        cartoon_face = cartoon_face.crop(bbox)
-        print(f"  ✔ Trimmed to content: {cartoon_face.size}")
+    # Sanity check the contract rather than silently misplacing 28
+    # pages. A wrong canvas size here means cartoonify.py didn't run,
+    # or an old/hand-edited file was passed in.
+    if cartoon_face.size != (FACE_CANVAS_SIZE, FACE_CANVAS_SIZE):
+        print(f"  ⚠ WARNING: expected {FACE_CANVAS_SIZE}x{FACE_CANVAS_SIZE}, "
+              f"got {cartoon_face.width}x{cartoon_face.height}")
+        print("    Placement assumes the cartoonify.py contract. If this "
+              "file didn't come from cartoonify.py, positions will be off.")
+
+    # NOTE: no getbbox()/crop here. See the header comment.
 
     # ── Create output directory ───────────────────────────────
     os.makedirs(output_dir, exist_ok=True)
@@ -132,33 +148,52 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
             fz_w = face_zone["w"]
             fz_h = face_zone["h"]
 
-            # SIZE comes from face_zone — scale to fit
-            face_w, face_h = cartoon_face.size
-            scale  = min(fz_w / face_w, fz_h / face_h)
-            new_w  = max(1, int(face_w * scale))
-            new_h  = max(1, int(face_h * scale))
+            # ── SIZE ──────────────────────────────────────────
+            # Scale is derived from zone height against the KNOWN
+            # subject height, not the measured image.
+            #
+            # Width is deliberately ignored. The old min(w_fit, h_fit)
+            # let hair volume drive the scale, so faces came out
+            # different sizes for different children. Height-only
+            # scaling keeps every child's face identically sized.
+            subject_h = FACE_CANVAS_SIZE * FACE_SUBJECT_PCT
+            scale     = fz_h / subject_h
 
-            face_resized = cartoon_face.resize((new_w, new_h), Image.LANCZOS)
-            face_rgba    = face_resized.convert("RGBA")
+            new_w = max(1, int(cartoon_face.width  * scale))
+            new_h = max(1, int(cartoon_face.height * scale))
 
-            # POSITION comes from neck_anchor — the bottom edge of
-            # the trimmed face image (= neck/chin) lands exactly on
-            # the anchor point set in zone_finder. No detection.
+            face_rgba = cartoon_face.resize((new_w, new_h), Image.LANCZOS)
+
+            # ── POSITION ──────────────────────────────────────
+            # Two known canvas points, scaled, mapped onto neck_anchor:
+            #   face centre x = canvas mid-x
+            #   neck bottom y = canvas bottom edge
+            # Nothing is measured, so nothing varies per child.
             neck = zone.get("neck_anchor")
             if neck:
-                center_x = neck["x"] - new_w // 2
-                center_y = neck["y"] - new_h   # bottom edge = neck point
-                center_y = max(0, center_y)    # never push above top edge
+                canvas_face_cx = int(FACE_CANVAS_SIZE * 0.5 * scale)
+                canvas_neck_y  = int(FACE_CANVAS_SIZE * scale)
+
+                center_x = neck["x"] - canvas_face_cx
+                center_y = neck["y"] - canvas_neck_y
+
+                # No clamping. A negative y means the zone genuinely
+                # doesn't fit and zones.json needs fixing — clamping
+                # would just hide that by shoving the face downward.
+                if center_y < 0:
+                    print(f"         ⚠ Face overflows top edge (y={center_y}) "
+                          f"— check neck_anchor/face_zone for {page_key}")
             else:
                 # Fallback for any page where neck_anchor isn't set yet
                 center_x = fz_x + (fz_w - new_w) // 2
                 center_y = fz_y + (fz_h - new_h) // 2
+                print("         ⚠ No neck_anchor — using face_zone centre")
 
             # Paste using the face's own transparency as the mask
             template.paste(face_rgba, (center_x, center_y), face_rgba)
 
             print(f"         ✔ Face pasted at ({center_x}, {center_y}) "
-                  f"size {new_w}x{new_h}")
+                  f"size {new_w}x{new_h} (scale {scale:.3f})")
 
         # ── Save composed page ────────────────────────────────
         final_page  = template.convert("RGB")
@@ -179,16 +214,17 @@ if __name__ == "__main__":
 
     import glob
 
-    # Find most recent cartoon face
+    # Only face_cartoon.png is valid input now — face_ready.png does
+    # not satisfy the placement contract (different subject framing),
+    # so it's no longer accepted as a stand-in.
     candidates = sorted(
-        glob.glob("output/*/face_cartoon.png") +
-        glob.glob("output/*/face_ready.png"),
+        glob.glob("output/*/face_cartoon.png"),
         key=os.path.getmtime,
         reverse=True
     )
 
     if not candidates:
-        print("❌ No face images found. Run main.py first.")
+        print("❌ No face_cartoon.png found. Run cartoonify.py first.")
         exit(1)
 
     test_face  = candidates[0]

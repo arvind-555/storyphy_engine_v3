@@ -13,7 +13,7 @@ import sys
 from PIL import Image, ImageDraw
 
 STANDARD_SIZE = 800
-BOTTOM_MARGIN = 0.05  # must match face_prep.py
+BOTTOM_MARGIN = 0  # must match face_prep.py
 
 
 def check(path):
