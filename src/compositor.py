@@ -44,6 +44,7 @@ import json
 import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from cartoonify import REFERENCE_FACE_CX
 
 # ── Configuration ───────────────────────────────────────────
 TEMPLATES_DIR = "templates"
@@ -55,6 +56,11 @@ ZONES_FILE    = "config/zones.json"
 FACE_CANVAS_SIZE = 800    # must match cartoonify.py ANCHOR_CANVAS_SIZE
 FACE_SUBJECT_PCT = 0.68   # must match cartoonify.py TARGET_SUBJECT_HEIGHT_PCT
 
+
+# Must match cartoonify.py's REFERENCE_FACE_CX. Measured from the
+# reference face that composites correctly on all 28 templates —
+# it is NOT canvas mid-x. If you recalibrate there, change it here.
+REFERENCE_FACE_CX = 385
 
 # ── Main Function ─────────────────────────────────────────────
 def compose_all_pages(cartoon_face_path, child_name, output_dir):
@@ -171,7 +177,7 @@ def compose_all_pages(cartoon_face_path, child_name, output_dir):
             # Nothing is measured, so nothing varies per child.
             neck = zone.get("neck_anchor")
             if neck:
-                canvas_face_cx = int(FACE_CANVAS_SIZE * 0.5 * scale)
+                canvas_face_cx = int(REFERENCE_FACE_CX * scale)
                 canvas_neck_y  = int(FACE_CANVAS_SIZE * scale)
 
                 center_x = neck["x"] - canvas_face_cx
